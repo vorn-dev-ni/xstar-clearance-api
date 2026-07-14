@@ -47,6 +47,11 @@ export class ListExpensesDto extends PaginationQueryDto {
   @IsString()
   supplierId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by linked clearance job' })
+  @IsOptional()
+  @IsString()
+  clearanceJobId?: string;
+
   /** Explicit record-date range; takes precedence over month/year. */
   @ApiPropertyOptional({ example: '2026-01-01' })
   @IsOptional()

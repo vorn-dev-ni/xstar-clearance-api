@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
 import { ListUploadsDto } from './dto/list-uploads.dto';
 import { PresignUploadDto } from './dto/presign-upload.dto';
+import { UpdateUploadDto } from './dto/update-upload.dto';
 import { UploadsService } from './uploads.service';
 
 @ApiTags('uploads')
@@ -47,6 +49,15 @@ export class UploadsController {
   @Get()
   findAll(@Query() query: ListUploadsDto) {
     return this.uploads.findAll(query);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUploadDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.uploads.updateMeta(id, dto, user.userId);
   }
 
   @Delete(':id')

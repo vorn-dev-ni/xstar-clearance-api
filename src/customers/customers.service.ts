@@ -2,6 +2,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { paginationMeta, toSkipTake } from '../common/pagination';
@@ -16,7 +17,9 @@ export class CustomersService {
 
   async create(dto: CreateCustomerDto) {
     try {
-      return await this.prisma.customer.create({ data: dto });
+      return await this.prisma.customer.create({
+        data: { ...dto, registrationDate: new Date(dto.registrationDate) },
+      });
     } catch (e) {
       throw this.mapUniqueError(e);
     }
@@ -55,9 +58,26 @@ export class CustomersService {
   }
 
   async update(id: string, dto: UpdateCustomerDto) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+    if (
+      dto.isActive !== undefined &&
+      dto.isActive !== existing.isActive &&
+      !dto.remark?.trim()
+    ) {
+      throw new UnprocessableEntityException(
+        'A remark is required when changing customer status',
+      );
+    }
     try {
-      return await this.prisma.customer.update({ where: { id }, data: dto });
+      return await this.prisma.customer.update({
+        where: { id },
+        data: {
+          ...dto,
+          ...(dto.registrationDate
+            ? { registrationDate: new Date(dto.registrationDate) }
+            : {}),
+        },
+      });
     } catch (e) {
       throw this.mapUniqueError(e);
     }

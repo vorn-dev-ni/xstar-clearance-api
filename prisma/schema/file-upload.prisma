@@ -14,6 +14,7 @@ model FileUpload {
   size         Int?
   entityType   String? // "Invoice", "Patent", ...
   entityId     String?
+  documentType DocumentType? // shipping-document category (for ClearanceJob files)
   status       FileUploadStatus @default(PENDING)
   uploadedBy   String
 
@@ -27,4 +28,21 @@ model FileUpload {
 enum FileUploadStatus {
   PENDING
   UPLOADED
+}
+
+enum DocumentType {
+  COMMERCIAL_INVOICE
+  PACKING_LIST
+  BILL_OF_LADING
+  AIR_WAYBILL
+  CERTIFICATE_OF_ORIGIN
+  IMPORT_PERMIT
+  INSURANCE_CERTIFICATE
+  CUSTOMS_DECLARATION
+  // Customer-profile documents
+  PATENT
+  YEARLY_VAT_PAYMENT
+  REPRESENTATIVE_IMAGE
+  MOC_DOCUMENT
+  OTHER
 }

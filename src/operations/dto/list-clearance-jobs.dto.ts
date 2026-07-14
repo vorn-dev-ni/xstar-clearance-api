@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { JobStatus } from '@prisma/client';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export class ListClearanceJobsDto extends PaginationQueryDto {
@@ -7,6 +8,11 @@ export class ListClearanceJobsDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   customerId?: string;
+
+  @ApiPropertyOptional({ enum: JobStatus })
+  @IsOptional()
+  @IsEnum(JobStatus)
+  status?: JobStatus;
 
   @ApiPropertyOptional()
   @IsOptional()

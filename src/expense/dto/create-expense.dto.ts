@@ -34,6 +34,11 @@ export class CreateExpenseDto {
   @IsString()
   supplierName?: string;
 
+  @ApiPropertyOptional({ description: 'Clearance job this expense is for' })
+  @IsOptional()
+  @IsString()
+  clearanceJobId?: string;
+
   @ApiProperty({ example: 30.8 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()

@@ -56,7 +56,12 @@ model ExpenseRecord {
   // Relations
   journalEntry JournalEntry[]
 
+  // Optional link: expense incurred for a clearance job (job costing)
+  clearanceJobId String?
+  clearanceJob   ClearanceJob? @relation(fields: [clearanceJobId], references: [id])
+
   @@index([supplierId])
+  @@index([clearanceJobId])
   @@index([recordDate])
   @@index([expenseType])
   @@index([status])

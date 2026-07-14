@@ -42,6 +42,7 @@ export class IncomeService {
           description: dto.description,
           serviceType: dto.serviceType,
           customerId: dto.customerId,
+          clearanceJobId: dto.clearanceJobId,
           amount: dto.amount,
           currency: dto.currency,
           invoiceNumber: dto.invoiceNumber,
@@ -86,6 +87,7 @@ export class IncomeService {
       status: query.status,
       serviceType: query.serviceType,
       customerId: query.customerId,
+      clearanceJobId: query.clearanceJobId,
       recordDate,
     };
   }

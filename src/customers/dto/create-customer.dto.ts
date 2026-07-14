@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsISO8601,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateCustomerDto {
   @ApiProperty({ example: '027-01-26' })
@@ -88,4 +94,29 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ description: 'Free-text location' })
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiProperty({
+    example: '2026-07-14',
+    description:
+      'Date the client was registered in the system (contract may predate)',
+  })
+  @IsISO8601()
+  registrationDate!: string;
+
+  @ApiPropertyOptional({
+    description: 'Editable anytime; required whenever isActive changes',
+  })
+  @IsOptional()
+  @IsString()
+  remark?: string;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

@@ -23,6 +23,11 @@ model Customer {
   bankName      String?
   isActive      Boolean  @default(true)
   notes         String?
+
+  location         String? // free-text location (optional)
+  registrationDate DateTime? // when the client was registered in the system (contract may predate)
+  remark           String? // editable anytime; required whenever isActive flips
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

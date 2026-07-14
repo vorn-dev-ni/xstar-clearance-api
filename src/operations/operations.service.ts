@@ -3,10 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { JobStatus, Prisma } from '@prisma/client';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateClearanceJobDto } from './dto/create-clearance-job.dto';
+import {
+  BillExpenseItemDto,
+  BillRecordItemDto,
+  CreateClearanceJobDto,
+} from './dto/create-clearance-job.dto';
 import { ListClearanceJobsDto } from './dto/list-clearance-jobs.dto';
 import { UpdateClearanceJobDto } from './dto/update-clearance-job.dto';
 
@@ -15,18 +19,42 @@ export class OperationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateClearanceJobDto, userId: string) {
+    const { recordItems, expenseItems, ...rest } = dto;
     try {
-      return await this.prisma.clearanceJob.create({
-        data: { ...dto, date: new Date(dto.date), createdBy: userId },
+      return await this.prisma.$transaction(async (tx) => {
+        const jobNumber =
+          dto.jobNumber ||
+          (await nextJobNumber(tx, dto.transaction, new Date(dto.date)));
+        return tx.clearanceJob.create({
+          data: {
+            ...rest,
+            jobNumber,
+            date: new Date(dto.date),
+            eta: dto.eta ? new Date(dto.eta) : undefined,
+            issueClearanceDate: dto.issueClearanceDate
+              ? new Date(dto.issueClearanceDate)
+              : undefined,
+            status: dto.status ?? JobStatus.NEW,
+            createdBy: userId,
+            ...itemWrites(recordItems, expenseItems),
+          },
+        });
       });
     } catch (e) {
       throw this.mapUniqueError(e);
     }
   }
 
+  /** Predicted next auto job number — the actual number is assigned at save. */
+  async nextNumber(transaction?: string) {
+    const jobNumber = await nextJobNumber(this.prisma, transaction, new Date());
+    return { jobNumber };
+  }
+
   async findAll(query: ListClearanceJobsDto) {
     const where: Prisma.ClearanceJobWhereInput = {
       customerId: query.customerId,
+      status: query.status,
       shipmentStatus: query.shipmentStatus,
       ...(query.search
         ? {
@@ -59,18 +87,88 @@ export class OperationsService {
   async findOne(id: string) {
     const job = await this.prisma.clearanceJob.findUnique({
       where: { id },
-      include: { customer: true, incomeRecord: true },
+      include: {
+        customer: true,
+        incomeRecord: true,
+        recordItems: { orderBy: { itemNumber: 'asc' } },
+        expenseItems: { orderBy: { itemNumber: 'asc' } },
+        expenses: {
+          select: {
+            id: true,
+            recordNumber: true,
+            recordDate: true,
+            description: true,
+            amount: true,
+            currency: true,
+            status: true,
+            approvalStatus: true,
+          },
+          orderBy: { recordDate: 'desc' },
+        },
+        incomes: {
+          select: {
+            id: true,
+            recordNumber: true,
+            recordDate: true,
+            description: true,
+            amount: true,
+            currency: true,
+            status: true,
+          },
+          orderBy: { recordDate: 'desc' },
+        },
+      },
     });
     if (!job) throw new NotFoundException('Clearance job not found');
-    return job;
+
+    const actualRevenue = sumAmounts(job.incomes);
+    const actualCost = sumAmounts(job.expenses);
+    const estimatedRevenue =
+      job.estimatedRevenue != null ? Number(job.estimatedRevenue) : null;
+    const estimatedCost =
+      job.estimatedCost != null ? Number(job.estimatedCost) : null;
+    return {
+      ...job,
+      financials: {
+        actualRevenue,
+        actualCost,
+        profit: actualRevenue - actualCost,
+        estimatedRevenue,
+        estimatedCost,
+        estimatedProfit:
+          estimatedRevenue != null || estimatedCost != null
+            ? (estimatedRevenue ?? 0) - (estimatedCost ?? 0)
+            : null,
+      },
+    };
   }
 
   async update(id: string, dto: UpdateClearanceJobDto) {
     await this.findOne(id);
+    const { recordItems, expenseItems, ...rest } = dto;
     try {
       return await this.prisma.clearanceJob.update({
         where: { id },
-        data: { ...dto, ...(dto.date ? { date: new Date(dto.date) } : {}) },
+        data: {
+          ...rest,
+          ...(dto.date ? { date: new Date(dto.date) } : {}),
+          ...(dto.eta ? { eta: new Date(dto.eta) } : {}),
+          ...(dto.issueClearanceDate
+            ? { issueClearanceDate: new Date(dto.issueClearanceDate) }
+            : {}),
+          // Array provided (even empty) → full replace of the inline rows.
+          ...(recordItems !== undefined
+            ? {
+                recordItems: {
+                  deleteMany: {},
+                  create: recordItems.map(withComputedAmount),
+                },
+              }
+            : {}),
+          ...(expenseItems !== undefined
+            ? { expenseItems: { deleteMany: {}, create: expenseItems } }
+            : {}),
+        },
       });
     } catch (e) {
       throw this.mapUniqueError(e);
@@ -88,4 +186,47 @@ export class OperationsService {
     }
     return e;
   }
+}
+
+function sumAmounts(rows: { amount: Prisma.Decimal }[]): number {
+  return rows.reduce((sum, r) => sum + Number(r.amount), 0);
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function withComputedAmount(item: BillRecordItemDto) {
+  return { ...item, amount: round2(item.quantity * item.unitPrice) };
+}
+
+function itemWrites(
+  recordItems?: BillRecordItemDto[],
+  expenseItems?: BillExpenseItemDto[],
+) {
+  return {
+    ...(recordItems?.length
+      ? { recordItems: { create: recordItems.map(withComputedAmount) } }
+      : {}),
+    ...(expenseItems?.length ? { expenseItems: { create: expenseItems } } : {}),
+  };
+}
+
+/** IMP/EXP prefix from the transaction field, else JOB; per-year sequence. */
+async function nextJobNumber(
+  tx: Pick<Prisma.TransactionClient, 'clearanceJob'>,
+  transaction: string | undefined,
+  date: Date,
+): Promise<string> {
+  const t = transaction?.trim().toUpperCase() ?? '';
+  const prefix = t.startsWith('IMP')
+    ? 'IMP'
+    : t.startsWith('EXP')
+      ? 'EXP'
+      : 'JOB';
+  const year = date.getUTCFullYear();
+  const count = await tx.clearanceJob.count({
+    where: { jobNumber: { startsWith: `${prefix}-${year}-` } },
+  });
+  return `${prefix}-${year}-${String(count + 1).padStart(4, '0')}`;
 }

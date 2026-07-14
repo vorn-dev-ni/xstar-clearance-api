@@ -50,7 +50,12 @@ model IncomeRecord {
   journalEntry  JournalEntry[]
   clearanceJobs ClearanceJob[]
 
+  // Optional link: revenue earned on a clearance job (job costing)
+  clearanceJobId String?
+  clearanceJob   ClearanceJob? @relation("JobIncomes", fields: [clearanceJobId], references: [id])
+
   @@index([customerId])
+  @@index([clearanceJobId])
   @@index([recordDate])
   @@index([serviceType])
   @@index([status])

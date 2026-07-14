@@ -7,7 +7,9 @@ import type { CreateClearanceJobDto } from './dto/create-clearance-job.dto';
 function makePrisma() {
   const calls: { findMany?: unknown } = {};
   const clearanceJob = {
-    create: jest.fn(),
+    create: jest.fn((args: { data: Record<string, unknown> }) =>
+      Promise.resolve(args.data),
+    ),
     findMany: jest.fn((args: unknown) => {
       calls.findMany = args;
       return Promise.resolve([]);
@@ -16,7 +18,11 @@ function makePrisma() {
   };
   const prisma = {
     clearanceJob,
-    $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    // Supports both the array form and the interactive-callback form.
+    $transaction: jest.fn(
+      (arg: Promise<unknown>[] | ((tx: unknown) => unknown)) =>
+        typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
+    ),
   };
   return { prisma: prisma as unknown as PrismaService, clearanceJob, calls };
 }
@@ -41,6 +47,29 @@ describe('OperationsService', () => {
     await expect(service.create(dto, 'user_1')).rejects.toBeInstanceOf(
       ConflictException,
     );
+  });
+
+  it('keeps a manually entered job number', async () => {
+    const { prisma } = makePrisma();
+    const service = new OperationsService(prisma);
+
+    const created = (await service.create(dto, 'user_1')) as {
+      jobNumber: string;
+    };
+    expect(created.jobNumber).toBe('JOB-2026-001');
+  });
+
+  it('auto-generates the job number from the transaction type', async () => {
+    const { prisma, clearanceJob } = makePrisma();
+    clearanceJob.count.mockResolvedValue(4);
+    const service = new OperationsService(prisma);
+
+    const created = (await service.create(
+      { date: '2026-05-22', customerId: 'cust_1', transaction: 'IMP' },
+      'user_1',
+    )) as { jobNumber: string; status: string };
+    expect(created.jobNumber).toBe('IMP-2026-0005');
+    expect(created.status).toBe('NEW');
   });
 
   it('searches by job number or BL/booking number', async () => {

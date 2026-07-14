@@ -28,6 +28,11 @@ export class CreateIncomeDto {
   @IsString()
   customerId!: string;
 
+  @ApiPropertyOptional({ description: 'Clearance job this revenue is for' })
+  @IsOptional()
+  @IsString()
+  clearanceJobId?: string;
+
   @ApiProperty({ example: 289.06 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()

@@ -34,6 +34,12 @@ export class OperationsController {
     return this.operations.findAll(query);
   }
 
+  // Must be declared before `:id` so Nest doesn't treat it as an id.
+  @Get('next-number')
+  nextNumber(@Query('transaction') transaction?: string) {
+    return this.operations.nextNumber(transaction);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.operations.findOne(id);

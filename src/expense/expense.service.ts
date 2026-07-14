@@ -44,6 +44,7 @@ export class ExpenseService {
           expenseType: dto.expenseType,
           supplierId: dto.supplierId,
           supplierName: dto.supplierName,
+          clearanceJobId: dto.clearanceJobId,
           amount: dto.amount,
           currency: dto.currency,
           accountId: dto.accountId,
@@ -94,6 +95,7 @@ export class ExpenseService {
       approvalStatus: query.approvalStatus,
       expenseType: query.expenseType,
       supplierId: query.supplierId,
+      clearanceJobId: query.clearanceJobId,
       recordDate,
     };
   }

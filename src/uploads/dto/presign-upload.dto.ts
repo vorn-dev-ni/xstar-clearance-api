@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { DocumentType } from '@prisma/client';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class PresignUploadDto {
   @ApiProperty({ example: 'invoice-ST26-000001.pdf' })
@@ -25,4 +26,12 @@ export class PresignUploadDto {
   @IsOptional()
   @IsString()
   entityId?: string;
+
+  @ApiPropertyOptional({
+    enum: DocumentType,
+    description: 'Shipping-document category (e.g. BILL_OF_LADING)',
+  })
+  @IsOptional()
+  @IsEnum(DocumentType)
+  documentType?: DocumentType;
 }

@@ -7,10 +7,11 @@
 /// clearance, transaction) are free text by design. `blBookingNumber` may be
 /// linked to an income record via `incomeRecordId`.
 model ClearanceJob {
-  id             String   @id @default(cuid())
-  jobNumber      String   @unique // MANUAL, user-entered
+  id             String     @id @default(cuid())
+  jobNumber      String     @unique // manual or auto-generated (IMP/EXP/JOB-YYYY-NNNN)
   date           DateTime
-  shipmentStatus String? // free text
+  status         JobStatus? // workflow status; null on legacy rows (see shipmentStatus)
+  shipmentStatus String? // legacy free text, kept for old rows
 
   customerId   String
   customer     Customer @relation(fields: [customerId], references: [id])
@@ -31,6 +32,35 @@ model ClearanceJob {
   contacts      String? // by mr.wei, by mr jason
   other         String?
 
+  // Shipment details (all optional — filled when available)
+  originCountry      String?
+  originPort         String?
+  destinationCountry String?
+  destinationPort    String?
+  transportMode      TransportMode?
+  shipperDetails     String?
+  consigneeDetails   String?
+  eta                DateTime? // expected arrival date
+  goodsValue         Decimal?       @db.Decimal(15, 2) // commercial invoice value
+  goodsCurrency      String?
+  incoterms          String? // FOB, CIF, EXW, DDP, ...
+
+  // Job costing
+  estimatedRevenue Decimal? @db.Decimal(15, 2)
+  estimatedCost    Decimal? @db.Decimal(15, 2)
+  assignedStaff    String?
+  brokerName       String?
+
+  // Billing (the job doubles as the client-facing bill)
+  issueClearanceDate DateTime?
+  totalAmount        Decimal?  @db.Decimal(15, 2) // agreed total incl. tax & expenses
+  depositAmount      Decimal?  @db.Decimal(15, 2) // client prepayment
+
+  expenses     ExpenseRecord[]
+  incomes      IncomeRecord[]    @relation("JobIncomes")
+  recordItems  BillRecordItem[]
+  expenseItems BillExpenseItem[]
+
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -38,4 +68,48 @@ model ClearanceJob {
   @@index([customerId])
   @@index([date])
   @@index([jobNumber])
+  @@index([status])
+}
+
+enum TransportMode {
+  AIR
+  SEA
+  LAND
+  COURIER
+}
+
+enum JobStatus {
+  NEW
+  DOCS_COLLECTED
+  DECLARATION_SUBMITTED
+  CLEARED
+  COMPLETED
+  CANCELLED
+}
+
+/// Inline product/service rows on a bill (clearance job). Lightweight — not
+/// accounting records; the linked ExpenseRecord/IncomeRecord stay separate.
+model BillRecordItem {
+  id             String       @id @default(cuid())
+  clearanceJobId String
+  clearanceJob   ClearanceJob @relation(fields: [clearanceJobId], references: [id], onDelete: Cascade)
+  itemNumber     Int
+  description    String
+  quantity       Decimal      @db.Decimal(15, 4)
+  unitPrice      Decimal      @db.Decimal(15, 2)
+  amount         Decimal      @db.Decimal(15, 2) // computed = quantity * unitPrice
+
+  @@index([clearanceJobId])
+}
+
+/// Inline expense rows on a bill (clearance job).
+model BillExpenseItem {
+  id             String       @id @default(cuid())
+  clearanceJobId String
+  clearanceJob   ClearanceJob @relation(fields: [clearanceJobId], references: [id], onDelete: Cascade)
+  itemNumber     Int
+  description    String
+  amount         Decimal      @db.Decimal(15, 2)
+
+  @@index([clearanceJobId])
 }

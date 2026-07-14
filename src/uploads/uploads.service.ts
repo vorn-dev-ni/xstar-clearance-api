@@ -10,6 +10,7 @@ import { S3Service } from '../storage/s3.service';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
 import { ListUploadsDto } from './dto/list-uploads.dto';
 import { PresignUploadDto } from './dto/presign-upload.dto';
+import { UpdateUploadDto } from './dto/update-upload.dto';
 
 /** Images + business documents. Anything else is rejected at presign. */
 export const ALLOWED_MIME_TYPES = [
@@ -54,6 +55,7 @@ export class UploadsService {
         mimeType: dto.mimeType,
         entityType: dto.entityType,
         entityId: dto.entityId,
+        documentType: dto.documentType,
         uploadedBy: userId,
       },
     });
@@ -115,6 +117,24 @@ export class UploadsService {
       where: { entityType: query.entityType, entityId: query.entityId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /** Re-tag a file's document category after upload. */
+  async updateMeta(id: string, dto: UpdateUploadDto, userId: string) {
+    const file = await this.findOrThrow(id);
+    const updated = await this.prisma.fileUpload.update({
+      where: { id },
+      data: { documentType: dto.documentType },
+    });
+    await this.audit.log({
+      userId,
+      entityType: 'FileUpload',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      before: { documentType: file.documentType },
+      after: { documentType: updated.documentType },
+    });
+    return updated;
   }
 
   async remove(id: string, userId: string) {
