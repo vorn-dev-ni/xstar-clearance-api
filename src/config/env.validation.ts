@@ -17,6 +17,13 @@ export const envSchema = z.object({
   // Access-token lifetime (any `ms`/jsonwebtoken duration string, e.g. `24h`).
   JWT_EXPIRY: z.string().default('24h'),
 
+  // Rate limiting: window length (ms) and max requests per window per client IP.
+  THROTTLE_TTL: z.coerce.number().int().positive().default(60000),
+  THROTTLE_LIMIT: z.coerce.number().int().positive().default(100),
+  // Set true when running behind a reverse proxy / load balancer so the
+  // throttler sees the real client IP (X-Forwarded-For) instead of the proxy's.
+  TRUST_PROXY: z.stringbool().default(false),
+
   // AWS S3 — backs the presigned-URL file upload service.
   AWS_REGION: z.string().min(1, 'AWS_REGION is required'),
   AWS_S3_BUCKET: z.string().min(1, 'AWS_S3_BUCKET is required'),

@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from './auth.types';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -13,6 +14,8 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
+  // Stricter than the global limit: unauthenticated account creation.
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @Post('register')
   @ApiOperation({ summary: 'Register a new user and return a JWT' })
   register(@Body() dto: RegisterDto) {
@@ -20,6 +23,8 @@ export class AuthController {
   }
 
   @Public()
+  // Stricter than the global limit: brute-force protection.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   @HttpCode(200)
   @ApiOperation({ summary: 'Authenticate and return a JWT' })

@@ -5,11 +5,14 @@ import {
   HealthCheckService,
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('health')
 @Public()
+// Load-balancer / uptime probes must never be rate-limited.
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(

@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuditService } from '../audit/audit.service';
 import { AllExceptionsFilter } from './filters/all-exceptions.filter';
 import { RecordNumberService } from './record-number.service';
@@ -15,6 +16,9 @@ import { RecordNumberService } from './record-number.service';
     RecordNumberService,
     AuditService,
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // Registered here (before AuthModule) so rate limiting rejects floods
+    // with 429 before any JWT verification runs.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
   exports: [RecordNumberService, AuditService],
 })

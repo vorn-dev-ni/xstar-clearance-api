@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
-import { validate } from './config/env.validation';
+import { validate, type Env } from './config/env.validation';
 import { CustomersModule } from './customers/customers.module';
 import { DepositsModule } from './deposits/deposits.module';
 import { ExpenseModule } from './expense/expense.module';
@@ -31,6 +32,18 @@ import { UsersModule } from './users/users.module';
       // Select the env file by NODE_ENV (.env.development / .env.production).
       envFilePath: `.env.${process.env.NODE_ENV ?? 'development'}`,
       validate,
+    }),
+    // Global per-IP rate limiting; enforced by the ThrottlerGuard in CommonModule.
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => ({
+        throttlers: [
+          {
+            ttl: config.get('THROTTLE_TTL', { infer: true }),
+            limit: config.get('THROTTLE_LIMIT', { infer: true }),
+          },
+        ],
+      }),
     }),
     PrismaModule,
     CommonModule,

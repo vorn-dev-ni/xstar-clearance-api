@@ -1,17 +1,24 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import type { Env } from './config/env.validation';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService<Env, true>);
 
   // Security headers.
   app.use(helmet());
+
+  // Behind a reverse proxy/LB, resolve the real client IP from
+  // X-Forwarded-For so per-IP rate limiting works correctly.
+  if (config.get('TRUST_PROXY', { infer: true })) {
+    app.set('trust proxy', 1);
+  }
 
   // CORS: `*` allows any origin, otherwise a comma-separated allowlist.
   const corsOrigin = config.get('CORS_ORIGIN', { infer: true });
