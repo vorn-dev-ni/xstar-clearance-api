@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { JournalModule } from '../journal/journal.module';
+import { ReportsModule } from '../reports/reports.module';
 import { ExpenseController } from './expense.controller';
+import { ExpenseExportService } from './expense-export.service';
 import { ExpenseService } from './expense.service';
 
 @Module({
-  imports: [JournalModule],
+  imports: [JournalModule, ReportsModule],
   controllers: [ExpenseController],
-  providers: [ExpenseService],
+  providers: [ExpenseService, ExpenseExportService],
 })
 export class ExpenseModule {}

@@ -1,7 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ServiceType, TransactionStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export class ListIncomeDto extends PaginationQueryDto {
@@ -33,4 +41,15 @@ export class ListIncomeDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   customerId?: string;
+
+  /** Explicit record-date range; takes precedence over month/year. */
+  @ApiPropertyOptional({ example: '2026-01-01' })
+  @IsOptional()
+  @IsISO8601()
+  dateFrom?: string;
+
+  @ApiPropertyOptional({ example: '2026-01-31' })
+  @IsOptional()
+  @IsISO8601()
+  dateTo?: string;
 }

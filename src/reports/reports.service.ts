@@ -101,6 +101,49 @@ export class ReportsService {
     };
   }
 
+  /** Monthly revenue/expense totals for a year (dashboard chart). */
+  async monthlyTrend(year: number) {
+    const lines = await this.prisma.journalEntryLine.findMany({
+      where: {
+        entry: {
+          status: EntryStatus.POSTED,
+          entryDate: {
+            gte: new Date(Date.UTC(year, 0, 1)),
+            lt: new Date(Date.UTC(year + 1, 0, 1)),
+          },
+        },
+      },
+      include: {
+        entry: { select: { entryDate: true } },
+        account: { select: { type: true } },
+      },
+    });
+
+    const months = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      revenue: 0,
+      expenses: 0,
+      netProfit: 0,
+    }));
+
+    for (const l of lines) {
+      const bucket = months[l.entry.entryDate.getUTCMonth()];
+      const amt = Number(l.amount);
+      if (l.account.type === AccountType.REVENUE) {
+        bucket.revenue = round2(
+          bucket.revenue + (l.entryType === EntryLineType.CREDIT ? amt : -amt),
+        );
+      } else if (l.account.type === AccountType.EXPENSE) {
+        bucket.expenses = round2(
+          bucket.expenses + (l.entryType === EntryLineType.DEBIT ? amt : -amt),
+        );
+      }
+    }
+    for (const m of months) m.netProfit = round2(m.revenue - m.expenses);
+
+    return { year, months };
+  }
+
   /** Income totals grouped by customer for the period. */
   async incomeSummary(month?: number, year?: number) {
     const range = monthYearRange(month, year);

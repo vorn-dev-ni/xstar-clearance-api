@@ -35,6 +35,20 @@ export class ExportQueryDto extends PeriodQueryDto {
   @IsOptional()
   @IsEnum(ExportFormat)
   format?: ExportFormat;
+
+  /** As-of date for snapshot reports (balance sheet). */
+  @ApiPropertyOptional({ example: '2026-02-28' })
+  @IsOptional()
+  @IsISO8601()
+  date?: string;
+}
+
+export class TrendQueryDto {
+  @ApiPropertyOptional({ description: 'Defaults to the current year.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  year?: number;
 }
 
 export class BalanceSheetQueryDto {

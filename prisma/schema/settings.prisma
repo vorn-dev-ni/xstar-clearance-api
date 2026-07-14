@@ -28,6 +28,14 @@ model CompanySettings {
 
   logo String? // URL or base64
 
+  // Bank / payment details printed on invoice & debit-note PDFs.
+  bankName          String?
+  bankAccountName   String?
+  bankAccountNumber String?
+  swiftCode         String?
+  chequePayableNote String?
+  khrExchangeRate   Decimal @default(4100) @db.Decimal(10, 2) // KHR per 1 USD
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

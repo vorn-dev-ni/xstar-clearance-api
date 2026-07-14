@@ -55,3 +55,50 @@ describe('ReportsService.aging', () => {
     expect(result.rows).toHaveLength(4);
   });
 });
+
+describe('ReportsService.monthlyTrend', () => {
+  it('buckets posted journal lines into 12 months of revenue/expenses', async () => {
+    const lines = [
+      {
+        amount: 500,
+        entryType: 'CREDIT',
+        entry: { entryDate: new Date(Date.UTC(2026, 0, 15)) },
+        account: { type: 'REVENUE' },
+      },
+      {
+        amount: 100,
+        entryType: 'DEBIT',
+        entry: { entryDate: new Date(Date.UTC(2026, 0, 20)) },
+        account: { type: 'EXPENSE' },
+      },
+      {
+        amount: 50,
+        entryType: 'DEBIT', // revenue reversal
+        entry: { entryDate: new Date(Date.UTC(2026, 5, 3)) },
+        account: { type: 'REVENUE' },
+      },
+    ];
+    const prisma = {
+      journalEntryLine: { findMany: jest.fn().mockResolvedValue(lines) },
+    } as unknown as PrismaService;
+    const service = new ReportsService(prisma);
+
+    const result = await service.monthlyTrend(2026);
+
+    expect(result.year).toBe(2026);
+    expect(result.months).toHaveLength(12);
+    expect(result.months[0]).toEqual({
+      month: 1,
+      revenue: 500,
+      expenses: 100,
+      netProfit: 400,
+    });
+    expect(result.months[5]).toEqual({
+      month: 6,
+      revenue: -50,
+      expenses: 0,
+      netProfit: -50,
+    });
+    expect(result.months[11].revenue).toBe(0);
+  });
+});

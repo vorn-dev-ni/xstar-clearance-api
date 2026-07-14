@@ -13,6 +13,7 @@ import {
   ExportFormat,
   ExportQueryDto,
   PeriodQueryDto,
+  TrendQueryDto,
 } from './dto/report-query.dto';
 import { ReportExportService } from './report-export.service';
 import { ReportsService } from './reports.service';
@@ -65,6 +66,11 @@ export class ReportsController {
     return this.reports.taxSummary(q.month, q.year);
   }
 
+  @Get('monthly-trend')
+  monthlyTrend(@Query() q: TrendQueryDto) {
+    return this.reports.monthlyTrend(q.year ?? new Date().getFullYear());
+  }
+
   @Get(':report/export')
   async export(
     @Param('report') report: string,
@@ -77,12 +83,12 @@ export class ReportsController {
     }
 
     const data = await this.buildReport(report, q);
-    const rows = this.exporter.flatten(data);
+    const document = await this.exporter.buildDocument(report, data);
     const format = q.format ?? ExportFormat.PDF;
     const safeName = title.replace(/[^a-z0-9]+/gi, '_');
 
     if (format === ExportFormat.EXCEL) {
-      const buffer = await this.exporter.toExcel(title, rows);
+      const buffer = await this.exporter.toExcel(document);
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -95,7 +101,7 @@ export class ReportsController {
       return;
     }
 
-    const buffer = await this.exporter.toPdf(title, rows);
+    const buffer = await this.exporter.toPdf(document);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
@@ -109,7 +115,7 @@ export class ReportsController {
       case 'profit-loss':
         return this.reports.profitLoss(q.month, q.year);
       case 'balance-sheet':
-        return this.reports.balanceSheet();
+        return this.reports.balanceSheet(q.date);
       case 'income-summary':
         return this.reports.incomeSummary(q.month, q.year);
       case 'expense-summary':

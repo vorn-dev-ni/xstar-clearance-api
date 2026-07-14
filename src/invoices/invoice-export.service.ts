@@ -1,5 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { CompanySettings, Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +9,38 @@ import { PrismaService } from '../prisma/prisma.service';
 type InvoiceWithRelations = Prisma.InvoiceGetPayload<{
   include: { lineItems: true; customer: true };
 }>;
+
+// Battambang (OFL): chosen over Noto Sans Khmer because fontkit (PDFKit's
+// shaper) crashes on Noto's GPOS anchors for anusvara sequences like "ទំ".
+const FONTS_DIR = path.join(__dirname, 'fonts');
+const KHMER_REGULAR = path.join(FONTS_DIR, 'Battambang-Regular.ttf');
+const KHMER_BOLD = path.join(FONTS_DIR, 'Battambang-Bold.ttf');
+
+/** Khmer labels for the bilingual invoice template. */
+const KH = {
+  taxInvoice: 'វិក្កយបត្រអាករ',
+  debitNote: 'លិខិតបំណុល',
+  invoiceNo: 'លេខរៀងវិក្កយបត្រ',
+  date: 'កាលបរិច្ឆេទ',
+  customer: 'អតិថិជន',
+  name: 'ឈ្មោះ',
+  address: 'អាសយដ្ឋាន',
+  telephone: 'ទូរស័ព្ទលេខ',
+  email: 'អ៊ីមែល',
+  vatTin: 'លេខអាករ',
+  no: 'ល.រ',
+  description: 'បរិយាយមុខទំនិញ',
+  quantity: 'បរិមាណ',
+  unitPrice: 'តម្លៃឯកតា',
+  amount: 'ថ្លៃទំនិញ',
+  remark: 'ផ្សេងៗ',
+  total: 'សរុប',
+  grandTotal: 'សរុបរួម',
+  rate: 'អត្រា',
+  grandTotalRiel: 'សរុបរួមជារៀល',
+  deposit: 'ប្រាក់កក់',
+  amountToBePaid: 'ប្រាក់ត្រូវបង់',
+};
 
 export type InvoiceListRow = Prisma.InvoiceGetPayload<{
   include: { customer: { select: { nameEn: true } } };
@@ -18,12 +52,20 @@ export interface InvoiceListSummary {
   totalDue: number;
 }
 
-const money = (n: Prisma.Decimal | number): string => Number(n).toFixed(2);
+const money = (n: Prisma.Decimal | number): string =>
+  Number(n).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 const day = (d: Date | null | undefined): string =>
   d ? d.toISOString().slice(0, 10) : '';
 
 @Injectable()
 export class InvoiceExportService {
+  /** Khmer labels degrade to English-only when the font asset is missing. */
+  private readonly khmerAvailable =
+    fs.existsSync(KHMER_REGULAR) && fs.existsSync(KHMER_BOLD);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /** Render a single invoice as a printable PDF document. */
@@ -41,6 +83,10 @@ export class InvoiceExportService {
     const company = await this.prisma.companySettings.findFirst();
 
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    if (this.khmerAvailable) {
+      doc.registerFont('khmer', KHMER_REGULAR);
+      doc.registerFont('khmer-bold', KHMER_BOLD);
+    }
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     const done = new Promise<Buffer>((resolve) => {
@@ -48,148 +94,377 @@ export class InvoiceExportService {
     });
 
     this.renderHeader(doc, invoice, company);
-    this.renderBillTo(doc, invoice);
+    this.renderCustomerBlock(doc, invoice);
     this.renderLineItems(doc, invoice);
-    this.renderTotals(doc, invoice);
+    this.renderTotals(doc, invoice, company);
+    this.renderBankFooter(doc, company);
 
     if (invoice.notes) {
-      doc.moveDown(1.5);
+      doc.moveDown(1);
       doc.fontSize(9).fillColor('#666').text(`Notes: ${invoice.notes}`, 50);
     }
     doc
       .fontSize(8)
       .fillColor('#999')
-      .text(`Generated ${new Date().toISOString()}`, 50, 780);
+      .text(`Generated ${new Date().toISOString().slice(0, 10)}`, 50, 790);
 
     doc.end();
     return { buffer: await done, invoiceNumber: invoice.invoiceNumber };
   }
 
+  /**
+   * Draw "ខ្មែរ/English" as two runs so Khmer uses the embedded Noto font
+   * while Latin stays in Helvetica. Falls back to English-only.
+   */
+  private biText(
+    doc: PDFKit.PDFDocument,
+    kh: string,
+    en: string,
+    x: number,
+    y: number,
+    opts: { size?: number; bold?: boolean; width?: number } = {},
+  ): void {
+    const size = opts.size ?? 9;
+    const enFont = opts.bold ? 'Helvetica-Bold' : 'Helvetica';
+    if (!this.khmerAvailable) {
+      doc
+        .font(enFont)
+        .fontSize(size)
+        .text(en, x, y, { width: opts.width, lineBreak: false });
+      return;
+    }
+    const khFont = opts.bold ? 'khmer-bold' : 'khmer';
+    try {
+      doc.font(khFont).fontSize(size).text(kh, x, y, { lineBreak: false });
+      const w = doc.widthOfString(kh);
+      doc
+        .font(enFont)
+        .fontSize(size)
+        .text(`/${en}`, x + w + 1, y + 2, { lineBreak: false });
+    } catch {
+      // Shaper failed on this string — fall back to the English label.
+      doc
+        .font(enFont)
+        .fontSize(size)
+        .text(en, x, y, { width: opts.width, lineBreak: false });
+    }
+    doc.font('Helvetica');
+  }
+
   private renderHeader(
     doc: PDFKit.PDFDocument,
     invoice: InvoiceWithRelations,
-    company: {
-      companyNameEn: string;
-      address: string | null;
-      phone: string | null;
-      email: string | null;
-      vatId: string;
-    } | null,
+    company: CompanySettings | null,
   ): void {
+    // Centered company block, Khmer name above the English name.
+    let y = 46;
+    if (this.khmerAvailable && company?.companyNameKh) {
+      try {
+        doc
+          .font('khmer-bold')
+          .fontSize(13)
+          .fillColor('#112E81')
+          .text(company.companyNameKh, 50, y, { width: 495, align: 'center' });
+        y = doc.y + 2;
+      } catch {
+        // Shaper failed on the Khmer name — continue with the English block.
+      }
+    }
     doc
-      .fontSize(16)
-      .fillColor('#000')
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .fillColor('#112E81')
       .text(
-        company?.companyNameEn ?? 'S.T STAR Logistics & Customs Clearance',
+        (
+          company?.companyNameEn ??
+          'S.T STAR LOGISTICS & CUSTOMS CLEARANCE SERVICE CO., LTD'
+        ).toUpperCase(),
         50,
-        50,
-        { width: 290 },
+        y,
+        { width: 495, align: 'center' },
       );
-    doc.fontSize(9).fillColor('#444');
-    if (company?.address) doc.text(company.address, { width: 290 });
-    const contact = [company?.phone, company?.email]
+    doc.font('Helvetica').fontSize(8).fillColor('#444');
+    const addressLine = [company?.address, company?.province, company?.country]
       .filter(Boolean)
-      .join(' · ');
-    if (contact) doc.text(contact);
-    if (company?.vatId) doc.text(`VAT TIN: ${company.vatId}`);
-
-    const title =
-      invoice.invoiceType === 'DEBIT_NOTE' ? 'DEBIT NOTE' : 'TAX INVOICE';
-    doc.fontSize(18).fillColor('#112E81').text(title, 350, 50, {
-      width: 195,
-      align: 'right',
-    });
-    doc.fontSize(10).fillColor('#000');
-    doc.text(`No: ${invoice.invoiceNumber}`, 350, doc.y + 4, {
-      width: 195,
-      align: 'right',
-    });
-    doc.text(`Date: ${day(invoice.invoiceDate)}`, 350, doc.y, {
-      width: 195,
-      align: 'right',
-    });
-    if (invoice.dueDate) {
-      doc.text(`Due: ${day(invoice.dueDate)}`, 350, doc.y, {
-        width: 195,
-        align: 'right',
+      .join(', ');
+    if (addressLine)
+      doc.text(addressLine, 50, doc.y + 2, { width: 495, align: 'center' });
+    const contact = [
+      company?.phone && `Tel: ${company.phone}`,
+      company?.email && `Email: ${company.email}`,
+    ]
+      .filter(Boolean)
+      .join('   ');
+    if (contact)
+      doc.text(contact, 50, doc.y + 1, { width: 495, align: 'center' });
+    if (company?.vatId) {
+      doc.text(`VAT TIN: ${company.vatId}`, 50, doc.y + 1, {
+        width: 495,
+        align: 'center',
       });
     }
-    doc.text(`Status: ${invoice.status}`, 350, doc.y, {
-      width: 195,
-      align: 'right',
-    });
+    doc
+      .moveTo(50, doc.y + 6)
+      .lineTo(545, doc.y + 6)
+      .strokeColor('#112E81')
+      .lineWidth(1.5)
+      .stroke()
+      .lineWidth(1);
+
+    // Centered bilingual document title.
+    const isDebitNote = invoice.invoiceType === 'DEBIT_NOTE';
+    const titleY = doc.y + 14;
+    if (this.khmerAvailable) {
+      doc
+        .font('khmer-bold')
+        .fontSize(14)
+        .fillColor('#000')
+        .text(isDebitNote ? KH.debitNote : KH.taxInvoice, 50, titleY, {
+          width: 495,
+          align: 'center',
+        });
+    }
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(14)
+      .fillColor('#000')
+      .text(isDebitNote ? 'DEBIT NOTE' : 'TAX INVOICE', 50, doc.y + 1, {
+        width: 495,
+        align: 'center',
+      });
+
+    // Invoice number + date, top right under the title.
+    const metaY = doc.y + 10;
+    this.biText(doc, KH.invoiceNo, 'Invoice N°', 370, metaY, { size: 8 });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(9)
+      .fillColor('#000')
+      .text(invoice.invoiceNumber, 490, metaY, { lineBreak: false });
+    this.biText(doc, KH.date, 'Date', 370, metaY + 15, { size: 8 });
+    doc
+      .font('Helvetica')
+      .fontSize(9)
+      .text(day(invoice.invoiceDate), 490, metaY + 15, { lineBreak: false });
+    doc.y = metaY;
   }
 
-  private renderBillTo(
+  private renderCustomerBlock(
     doc: PDFKit.PDFDocument,
     invoice: InvoiceWithRelations,
   ): void {
-    doc.moveDown(2);
-    const y = Math.max(doc.y, 150);
-    doc.fontSize(10).fillColor('#666').text('BILL TO', 50, y);
-    doc.fontSize(11).fillColor('#000').text(invoice.customer.nameEn, 50);
-    doc.fontSize(9).fillColor('#444');
-    if (invoice.customer.address) doc.text(invoice.customer.address);
-    if (invoice.customer.taxId) doc.text(`VAT TIN: ${invoice.customer.taxId}`);
-    if (invoice.customer.phone) doc.text(`Tel: ${invoice.customer.phone}`);
-    if (invoice.description) {
-      doc.moveDown(0.5);
-      doc.text(invoice.description);
+    const c = invoice.customer;
+    const rows: Array<[string, string, string]> = [
+      [KH.customer, 'Customer', c.code ?? ''],
+      [KH.name, 'Name', c.nameEn],
+      [KH.address, 'Address', c.address ?? ''],
+      [KH.telephone, 'Telephone N°', c.phone ?? ''],
+      [KH.email, 'Email Address', c.email ?? ''],
+      [KH.vatTin, 'VAT TIN', c.taxId ?? ''],
+    ];
+    let y = doc.y + 4;
+    for (const [kh, en, value] of rows) {
+      this.biText(doc, kh, en, 50, y, { size: 8 });
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#000')
+        .text(value, 160, y + 2, { width: 200, lineBreak: false });
+      doc
+        .moveTo(160, y + 13)
+        .lineTo(360, y + 13)
+        .strokeColor('#bbb')
+        .stroke();
+      y += 17;
     }
+    doc.y = y + 6;
   }
 
   private renderLineItems(
     doc: PDFKit.PDFDocument,
     invoice: InvoiceWithRelations,
   ): void {
-    doc.moveDown(1.5);
     const top = doc.y;
-    doc.fontSize(9).fillColor('#000');
-    doc.rect(50, top - 4, 495, 18).fill('#112E81');
-    doc.fillColor('#fff');
-    doc.text('#', 55, top, { width: 25 });
-    doc.text('Description', 85, top, { width: 235 });
-    doc.text('Qty', 325, top, { width: 45, align: 'right' });
-    doc.text('Unit Price', 375, top, { width: 75, align: 'right' });
-    doc.text('Amount', 455, top, { width: 85, align: 'right' });
-    doc.fillColor('#000');
+    const cols = [
+      { kh: KH.no, en: 'N°', x: 50, w: 28, align: 'left' as const },
+      {
+        kh: KH.description,
+        en: 'Description',
+        x: 78,
+        w: 202,
+        align: 'left' as const,
+      },
+      {
+        kh: KH.quantity,
+        en: 'Quantity',
+        x: 280,
+        w: 55,
+        align: 'right' as const,
+      },
+      {
+        kh: KH.unitPrice,
+        en: 'Unit Price',
+        x: 335,
+        w: 70,
+        align: 'right' as const,
+      },
+      {
+        kh: KH.amount,
+        en: 'Amount (US$)',
+        x: 405,
+        w: 85,
+        align: 'right' as const,
+      },
+      { kh: KH.remark, en: 'Remark', x: 490, w: 55, align: 'left' as const },
+    ];
 
-    let y = top + 20;
+    // Two-line bilingual header band: Khmer row above the English row.
+    const bandH = this.khmerAvailable ? 30 : 18;
+    doc.rect(50, top, 495, bandH).fill('#112E81');
+    for (const col of cols) {
+      if (this.khmerAvailable) {
+        doc
+          .font('khmer')
+          .fontSize(7)
+          .fillColor('#fff')
+          .text(col.kh, col.x + 3, top + 2, {
+            width: col.w - 6,
+            align: col.align,
+            lineBreak: false,
+          });
+      }
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(7)
+        .fillColor('#fff')
+        .text(col.en, col.x + 3, top + bandH - 12, {
+          width: col.w - 6,
+          align: col.align,
+        });
+    }
+    doc.font('Helvetica').fillColor('#000');
+
+    let y = top + bandH + 5;
     invoice.lineItems.forEach((li, i) => {
-      const descHeight = doc.heightOfString(li.description, { width: 235 });
-      doc.text(String(li.itemNumber ?? i + 1), 55, y, { width: 25 });
-      doc.text(li.description, 85, y, { width: 235 });
-      doc.text(String(Number(li.quantity)), 325, y, {
-        width: 45,
+      const descHeight = doc
+        .fontSize(9)
+        .heightOfString(li.description, { width: cols[1].w - 6 });
+      doc.text(String(li.itemNumber ?? i + 1), cols[0].x + 3, y, {
+        width: cols[0].w - 6,
+      });
+      doc.text(li.description, cols[1].x + 3, y, { width: cols[1].w - 6 });
+      doc.text(String(Number(li.quantity)), cols[2].x + 3, y, {
+        width: cols[2].w - 6,
         align: 'right',
       });
-      doc.text(money(li.unitPrice), 375, y, { width: 75, align: 'right' });
-      doc.text(money(li.amount), 455, y, { width: 85, align: 'right' });
+      doc.text(money(li.unitPrice), cols[3].x + 3, y, {
+        width: cols[3].w - 6,
+        align: 'right',
+      });
+      doc.text(money(li.amount), cols[4].x + 3, y, {
+        width: cols[4].w - 6,
+        align: 'right',
+      });
+      if (li.notes) {
+        doc.fontSize(8).text(li.notes, cols[5].x + 3, y, {
+          width: cols[5].w - 6,
+          height: 10,
+          ellipsis: true,
+        });
+        doc.fontSize(9);
+      }
       y += Math.max(descHeight, 12) + 6;
     });
-    doc.moveTo(50, y).lineTo(545, y).strokeColor('#ccc').stroke();
+    doc.moveTo(50, y).lineTo(545, y).strokeColor('#999').stroke();
     doc.y = y + 8;
   }
 
   private renderTotals(
     doc: PDFKit.PDFDocument,
     invoice: InvoiceWithRelations,
+    company: CompanySettings | null,
   ): void {
-    const rows: Array<[string, string, boolean?]> = [
-      ['Subtotal', money(invoice.subtotal)],
-      [`VAT ${Number(invoice.taxRate)}%`, money(invoice.taxAmount)],
-      [`TOTAL (${invoice.currency})`, money(invoice.totalAmount), true],
-      ['Paid', money(invoice.paidAmount)],
-      ['Balance Due', money(invoice.balanceDue), true],
+    const rate = Number(company?.khrExchangeRate ?? 4100);
+    const totalUsd = Number(invoice.totalAmount);
+    const riel = Math.round(totalUsd * rate);
+    const fmtRiel = `${riel.toLocaleString('en-US')} KHR`;
+
+    const rows: Array<{
+      kh: string;
+      en: string;
+      value: string;
+      bold?: boolean;
+    }> = [
+      { kh: KH.total, en: 'Total', value: money(invoice.subtotal) },
+      {
+        kh: '',
+        en: `VAT ${Number(invoice.taxRate)}%`,
+        value: money(invoice.taxAmount),
+      },
+      {
+        kh: KH.grandTotal,
+        en: 'Grand Total',
+        value: `$ ${money(invoice.totalAmount)}`,
+        bold: true,
+      },
+      {
+        kh: KH.rate,
+        en: 'Rate',
+        value: `1$ = ${rate.toLocaleString('en-US')} KHR`,
+      },
+      { kh: KH.grandTotalRiel, en: 'Grand Total in Riel', value: fmtRiel },
+      { kh: KH.deposit, en: 'Deposit', value: money(invoice.paidAmount) },
+      {
+        kh: KH.amountToBePaid,
+        en: 'Amount to be Paid',
+        value: `$ ${money(invoice.balanceDue)}`,
+        bold: true,
+      },
     ];
+
     let y = doc.y;
-    for (const [label, value, bold] of rows) {
-      doc.fontSize(bold ? 11 : 10);
-      doc.text(label, 325, y, { width: 125, align: 'right' });
-      doc.text(value, 455, y, { width: 85, align: 'right' });
-      y += bold ? 18 : 15;
+    for (const row of rows) {
+      if (row.bold) {
+        doc
+          .moveTo(315, y - 2)
+          .lineTo(545, y - 2)
+          .strokeColor('#666')
+          .stroke();
+      }
+      this.biText(doc, row.kh, row.en, 315, y, {
+        size: 8,
+        bold: row.bold,
+      });
+      doc
+        .font(row.bold ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(9)
+        .fillColor('#000')
+        .text(row.value, 445, y + 1, { width: 100, align: 'right' });
+      y += row.bold ? 18 : 15;
     }
+    doc.font('Helvetica');
     doc.y = y;
+  }
+
+  private renderBankFooter(
+    doc: PDFKit.PDFDocument,
+    company: CompanySettings | null,
+  ): void {
+    const lines = [
+      company?.bankAccountName && `Account Name: ${company.bankAccountName}`,
+      company?.bankAccountNumber && `Account N°: ${company.bankAccountNumber}`,
+      company?.bankName && `Bank: ${company.bankName}`,
+      company?.swiftCode && `SWIFT CODE: ${company.swiftCode}`,
+      company?.chequePayableNote,
+    ].filter((l): l is string => Boolean(l));
+    if (lines.length === 0) return;
+
+    // Bank block sits left of the totals; anchor it below the line items.
+    const y = doc.y - 15 * lines.length - 3;
+    doc.fontSize(8).fillColor('#000');
+    lines.forEach((line, i) => {
+      doc.text(line, 50, Math.max(y, 50) + i * 13, { width: 250 });
+    });
   }
 
   /** Export a filtered invoice list as an Excel workbook. */

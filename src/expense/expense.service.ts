@@ -81,14 +81,25 @@ export class ExpenseService {
     };
   }
 
-  async findAll(query: ListExpensesDto) {
-    const where: Prisma.ExpenseRecordWhereInput = {
+  private buildWhere(query: ListExpensesDto): Prisma.ExpenseRecordWhereInput {
+    const recordDate =
+      query.dateFrom || query.dateTo
+        ? {
+            gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
+            lte: query.dateTo ? new Date(query.dateTo) : undefined,
+          }
+        : monthYearRange(query.month, query.year);
+    return {
       status: query.status,
       approvalStatus: query.approvalStatus,
       expenseType: query.expenseType,
       supplierId: query.supplierId,
-      recordDate: monthYearRange(query.month, query.year),
+      recordDate,
     };
+  }
+
+  async findAll(query: ListExpensesDto) {
+    const where = this.buildWhere(query);
     const { skip, take } = toSkipTake(query.page, query.limit);
     const [rows, total, totalAgg, pendingAgg] = await this.prisma.$transaction([
       this.prisma.expenseRecord.findMany({
@@ -111,6 +122,27 @@ export class ExpenseService {
       summary: {
         totalExpenses: Number(totalAgg._sum.amount ?? 0),
         pendingApproval: Number(pendingAgg._sum.amount ?? 0),
+      },
+    };
+  }
+
+  /** Unpaginated fetch for exports (capped at 1000 most recent). */
+  async findAllForExport(query: ListExpensesDto) {
+    const where = this.buildWhere(query);
+    const [rows, agg] = await this.prisma.$transaction([
+      this.prisma.expenseRecord.findMany({
+        where,
+        include: { supplier: { select: { id: true, nameEn: true } } },
+        orderBy: { recordDate: 'desc' },
+        take: 1000,
+      }),
+      this.prisma.expenseRecord.aggregate({ where, _sum: { amount: true } }),
+    ]);
+    return {
+      rows,
+      summary: {
+        totalExpenses: Number(agg._sum.amount ?? 0),
+        recordCount: rows.length,
       },
     };
   }

@@ -72,4 +72,38 @@ export class UpdateCompanySettingsDto {
   @IsOptional()
   @IsString()
   logo?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  bankAccountName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  bankAccountNumber?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  swiftCode?: string;
+
+  @ApiPropertyOptional({
+    description: 'e.g. "Please make cheque payable to …"',
+  })
+  @IsOptional()
+  @IsString()
+  chequePayableNote?: string;
+
+  @ApiPropertyOptional({ description: 'KHR per 1 USD used on invoice PDFs' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  khrExchangeRate?: number;
 }

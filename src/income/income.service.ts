@@ -74,13 +74,24 @@ export class IncomeService {
     };
   }
 
-  async findAll(query: ListIncomeDto) {
-    const where: Prisma.IncomeRecordWhereInput = {
+  private buildWhere(query: ListIncomeDto): Prisma.IncomeRecordWhereInput {
+    const recordDate =
+      query.dateFrom || query.dateTo
+        ? {
+            gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
+            lte: query.dateTo ? new Date(query.dateTo) : undefined,
+          }
+        : monthYearRange(query.month, query.year);
+    return {
       status: query.status,
       serviceType: query.serviceType,
       customerId: query.customerId,
-      recordDate: monthYearRange(query.month, query.year),
+      recordDate,
     };
+  }
+
+  async findAll(query: ListIncomeDto) {
+    const where = this.buildWhere(query);
     const { skip, take } = toSkipTake(query.page, query.limit);
     const [rows, total, agg] = await this.prisma.$transaction([
       this.prisma.incomeRecord.findMany({
@@ -99,6 +110,27 @@ export class IncomeService {
       summary: {
         totalIncome: Number(agg._sum.amount ?? 0),
         recordCount: total,
+      },
+    };
+  }
+
+  /** Unpaginated fetch for exports (capped at 1000 most recent). */
+  async findAllForExport(query: ListIncomeDto) {
+    const where = this.buildWhere(query);
+    const [rows, agg] = await this.prisma.$transaction([
+      this.prisma.incomeRecord.findMany({
+        where,
+        include: { customer: { select: { id: true, nameEn: true } } },
+        orderBy: { recordDate: 'desc' },
+        take: 1000,
+      }),
+      this.prisma.incomeRecord.aggregate({ where, _sum: { amount: true } }),
+    ]);
+    return {
+      rows,
+      summary: {
+        totalIncome: Number(agg._sum.amount ?? 0),
+        recordCount: rows.length,
       },
     };
   }
