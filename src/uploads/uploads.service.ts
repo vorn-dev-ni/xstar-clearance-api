@@ -101,6 +101,31 @@ export class UploadsService {
         entityId: file.entityId,
       },
     });
+
+    if (
+      file.entityType === 'Customer' &&
+      file.entityId &&
+      file.documentType === 'REPRESENTATIVE_IMAGE'
+    ) {
+      try {
+        await this.prisma.customer.update({
+          where: { id: file.entityId },
+          data: { representativeImageUrl: file.key },
+        });
+      } catch {
+        // Ignore if customer not found
+      }
+    } else if (file.entityType === 'User' && file.entityId) {
+      try {
+        await this.prisma.user.update({
+          where: { id: file.entityId },
+          data: { avatarUrl: file.key },
+        });
+      } catch {
+        // Ignore if user not found
+      }
+    }
+
     return updated;
   }
 

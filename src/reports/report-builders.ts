@@ -17,12 +17,13 @@ interface ProfitLossData {
 
 interface BalanceSheetData {
   reportDate: string;
-  assets: { totalAssets: number };
-  liabilities: { totalLiabilities: number };
+  assets: { totalAssets: number; byAccount?: Record<string, number> };
+  liabilities: { totalLiabilities: number; byAccount?: Record<string, number> };
   equity: {
     contributedEquity: number;
     retainedEarnings: number;
     totalEquity: number;
+    byAccount?: Record<string, number>;
   };
   totalLiabilitiesAndEquity: number;
 }
@@ -125,6 +126,15 @@ function buildProfitLoss(data: ProfitLossData): ReportBody {
   };
 }
 
+function accountRows(map?: Record<string, number>): ReportRowSpec[] {
+  if (!map) return [];
+  return Object.entries(map).map(([label, value]) => ({
+    label,
+    value,
+    indent: 1,
+  }));
+}
+
 function buildBalanceSheet(data: BalanceSheetData): ReportBody {
   return {
     title: 'Balance Sheet',
@@ -134,6 +144,7 @@ function buildBalanceSheet(data: BalanceSheetData): ReportBody {
         kind: 'rows',
         heading: 'Assets',
         rows: [
+          ...accountRows(data.assets.byAccount),
           { label: 'Total Assets', value: data.assets.totalAssets, bold: true },
         ],
       },
@@ -141,6 +152,7 @@ function buildBalanceSheet(data: BalanceSheetData): ReportBody {
         kind: 'rows',
         heading: 'Liabilities',
         rows: [
+          ...accountRows(data.liabilities.byAccount),
           {
             label: 'Total Liabilities',
             value: data.liabilities.totalLiabilities,
@@ -152,6 +164,7 @@ function buildBalanceSheet(data: BalanceSheetData): ReportBody {
         kind: 'rows',
         heading: 'Equity',
         rows: [
+          ...accountRows(data.equity.byAccount),
           {
             label: 'Contributed Equity',
             value: data.equity.contributedEquity,

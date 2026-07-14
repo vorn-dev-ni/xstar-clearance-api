@@ -206,6 +206,11 @@ export class CreateClearanceJobDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  assignedStaffId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   assignedStaff?: string;
 
   @ApiPropertyOptional()

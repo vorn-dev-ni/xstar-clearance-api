@@ -23,6 +23,7 @@ const publicSelect = {
   department: true,
   phone: true,
   isActive: true,
+  avatarUrl: true,
   lastLogin: true,
   createdAt: true,
 } satisfies Prisma.UserSelect;

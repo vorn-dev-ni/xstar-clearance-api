@@ -35,7 +35,6 @@ enum PaymentMethod {
   CHECK
   CREDIT_CARD
   MOBILE_MONEY
-  CRYPTOCURRENCY
 }
 
 enum PaymentStatus {

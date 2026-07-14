@@ -25,9 +25,23 @@ export class OperationsService {
         const jobNumber =
           dto.jobNumber ||
           (await nextJobNumber(tx, dto.transaction, new Date(dto.date)));
+
+        let assignedStaffName = dto.assignedStaff;
+        if (dto.assignedStaffId && !assignedStaffName) {
+          const staffUser = await tx.user.findUnique({
+            where: { id: dto.assignedStaffId },
+            select: { firstName: true, lastName: true },
+          });
+          if (staffUser) {
+            assignedStaffName =
+              `${staffUser.firstName} ${staffUser.lastName}`.trim();
+          }
+        }
+
         return tx.clearanceJob.create({
           data: {
             ...rest,
+            assignedStaff: assignedStaffName,
             jobNumber,
             date: new Date(dto.date),
             eta: dto.eta ? new Date(dto.eta) : undefined,
@@ -74,7 +88,12 @@ export class OperationsService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.clearanceJob.findMany({
         where,
-        include: { customer: { select: { nameEn: true } } },
+        include: {
+          customer: { select: { nameEn: true } },
+          assignedStaffUser: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+        },
         orderBy: { date: 'desc' },
         skip,
         take,
@@ -89,6 +108,16 @@ export class OperationsService {
       where: { id },
       include: {
         customer: true,
+        assignedStaffUser: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            department: true,
+          },
+        },
         incomeRecord: true,
         recordItems: { orderBy: { itemNumber: 'asc' } },
         expenseItems: { orderBy: { itemNumber: 'asc' } },
@@ -146,11 +175,28 @@ export class OperationsService {
   async update(id: string, dto: UpdateClearanceJobDto) {
     await this.findOne(id);
     const { recordItems, expenseItems, ...rest } = dto;
+    delete (rest as Record<string, unknown>).jobNumber;
+
+    let assignedStaffName = rest.assignedStaff;
+    if (rest.assignedStaffId && rest.assignedStaff === undefined) {
+      const staffUser = await this.prisma.user.findUnique({
+        where: { id: rest.assignedStaffId },
+        select: { firstName: true, lastName: true },
+      });
+      if (staffUser) {
+        assignedStaffName =
+          `${staffUser.firstName} ${staffUser.lastName}`.trim();
+      }
+    }
+
     try {
       return await this.prisma.clearanceJob.update({
         where: { id },
         data: {
           ...rest,
+          ...(assignedStaffName !== undefined
+            ? { assignedStaff: assignedStaffName }
+            : {}),
           ...(dto.date ? { date: new Date(dto.date) } : {}),
           ...(dto.eta ? { eta: new Date(dto.eta) } : {}),
           ...(dto.issueClearanceDate

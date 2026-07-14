@@ -66,20 +66,31 @@ export class ReportsService {
   async balanceSheet(date?: string) {
     const accounts = await this.prisma.account.findMany({
       where: { isActive: true },
-      select: { type: true, balance: true },
+      select: { code: true, nameEn: true, type: true, balance: true },
+      orderBy: { code: 'asc' },
     });
 
     let assets = 0;
     let liabilities = 0;
     let equity = 0;
+    const assetsByAccount: Record<string, number> = {};
+    const liabilitiesByAccount: Record<string, number> = {};
+    const equityByAccount: Record<string, number> = {};
+
     for (const a of accounts) {
       const bal = Number(a.balance);
+      const key = `${a.code} - ${a.nameEn}`;
       if (a.type === AccountType.ASSET || a.type === AccountType.BANK) {
         assets = round2(assets + bal);
+        assetsByAccount[key] = round2((assetsByAccount[key] ?? 0) + bal);
       } else if (a.type === AccountType.LIABILITY) {
         liabilities = round2(liabilities + bal);
+        liabilitiesByAccount[key] = round2(
+          (liabilitiesByAccount[key] ?? 0) + bal,
+        );
       } else if (a.type === AccountType.EQUITY) {
         equity = round2(equity + bal);
+        equityByAccount[key] = round2((equityByAccount[key] ?? 0) + bal);
       }
     }
     // Retained earnings balances the sheet (assets = liabilities + equity).
@@ -88,12 +99,16 @@ export class ReportsService {
     return {
       reportType: 'BALANCE_SHEET',
       reportDate: date ?? new Date().toISOString().slice(0, 10),
-      assets: { totalAssets: assets },
-      liabilities: { totalLiabilities: liabilities },
+      assets: { totalAssets: assets, byAccount: assetsByAccount },
+      liabilities: {
+        totalLiabilities: liabilities,
+        byAccount: liabilitiesByAccount,
+      },
       equity: {
         contributedEquity: equity,
         retainedEarnings,
         totalEquity: round2(equity + retainedEarnings),
+        byAccount: equityByAccount,
       },
       totalLiabilitiesAndEquity: round2(
         liabilities + equity + retainedEarnings,

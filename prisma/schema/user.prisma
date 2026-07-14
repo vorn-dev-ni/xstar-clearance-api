@@ -12,6 +12,7 @@ model User {
   department String?
   phone     String?
   isActive  Boolean   @default(true)
+  avatarUrl String?   // profile avatar image
   lastLogin DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -25,6 +26,7 @@ model User {
   deposits         Deposit[]
   journalEntries   JournalEntry[]
   financialReports FinancialReport[]
+  assignedClearanceJobs ClearanceJob[] @relation("JobAssignedStaff")
 
   @@index([email])
   @@index([role])
