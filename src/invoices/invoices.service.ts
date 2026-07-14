@@ -105,7 +105,7 @@ export class InvoicesService {
     };
   }
 
-  async findAll(query: ListInvoicesDto) {
+  private buildWhere(query: ListInvoicesDto): Prisma.InvoiceWhereInput {
     const invoiceDate =
       query.dateFrom || query.dateTo
         ? {
@@ -113,7 +113,7 @@ export class InvoicesService {
             lte: query.dateTo ? new Date(query.dateTo) : undefined,
           }
         : undefined;
-    const where: Prisma.InvoiceWhereInput = {
+    return {
       status: query.status,
       invoiceType: query.invoiceType,
       customerId: query.customerId,
@@ -122,6 +122,10 @@ export class InvoicesService {
         : undefined,
       invoiceDate,
     };
+  }
+
+  async findAll(query: ListInvoicesDto) {
+    const where = this.buildWhere(query);
     const { skip, take } = toSkipTake(query.page, query.limit);
     const [rows, total, agg] = await this.prisma.$transaction([
       this.prisma.invoice.findMany({
@@ -140,6 +144,31 @@ export class InvoicesService {
     return {
       data: rows,
       pagination: paginationMeta(total, query.page, query.limit),
+      summary: {
+        totalInvoiced: Number(agg._sum.totalAmount ?? 0),
+        totalPaid: Number(agg._sum.paidAmount ?? 0),
+        totalDue: Number(agg._sum.balanceDue ?? 0),
+      },
+    };
+  }
+
+  /** Unpaginated fetch for exports (capped at 1000 most recent). */
+  async findAllForExport(query: ListInvoicesDto) {
+    const where = this.buildWhere(query);
+    const [rows, agg] = await this.prisma.$transaction([
+      this.prisma.invoice.findMany({
+        where,
+        include: { customer: { select: { nameEn: true } } },
+        orderBy: { invoiceDate: 'desc' },
+        take: 1000,
+      }),
+      this.prisma.invoice.aggregate({
+        where,
+        _sum: { totalAmount: true, paidAmount: true, balanceDue: true },
+      }),
+    ]);
+    return {
+      rows,
       summary: {
         totalInvoiced: Number(agg._sum.totalAmount ?? 0),
         totalPaid: Number(agg._sum.paidAmount ?? 0),
