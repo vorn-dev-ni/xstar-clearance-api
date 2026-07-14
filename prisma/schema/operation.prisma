@@ -1,0 +1,41 @@
+// ============================================
+// OPERATIONS — CUSTOMS CLEARANCE JOBS
+// ============================================
+
+/// A customs-clearance/shipment job register for S.T STAR. `jobNumber` is
+/// entered manually by staff (unique). Controlled fields (shipment status, port
+/// clearance, transaction) are free text by design. `blBookingNumber` may be
+/// linked to an income record via `incomeRecordId`.
+model ClearanceJob {
+  id             String   @id @default(cuid())
+  jobNumber      String   @unique // MANUAL, user-entered
+  date           DateTime
+  shipmentStatus String? // free text
+
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  customerName String? // manual/denormalized display
+
+  sizeVolume      String?
+  invoiceNumber   String?
+  blBookingNumber String? // e.g. 026F5222213
+
+  // Optional link: BL/booking → income record
+  incomeRecordId String?
+  incomeRecord   IncomeRecord? @relation(fields: [incomeRecordId], references: [id])
+
+  commodity     String? // HAND TOWEL, FACIAL TISSUE, ...
+  portClearance String? // PPAP / SHV / TL
+  transaction   String? // IMP / EXP
+  notice        String? // PASSED THIS SHIPMENT TO RLS, CLEARANCE BY S.T
+  contacts      String? // by mr.wei, by mr jason
+  other         String?
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([date])
+  @@index([jobNumber])
+}

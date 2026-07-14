@@ -1,0 +1,42 @@
+// ============================================
+// FINANCIAL REPORTS & STATEMENTS
+// ============================================
+
+model FinancialReport {
+  id         String     @id @default(cuid())
+  reportType ReportType
+  reportDate DateTime
+
+  // Totals for P&L
+  totalRevenue  Decimal? @db.Decimal(15, 2)
+  totalExpenses Decimal? @db.Decimal(15, 2)
+  grossProfit   Decimal? @db.Decimal(15, 2)
+  netProfit     Decimal? @db.Decimal(15, 2)
+
+  // For balance sheet
+  totalAssets      Decimal? @db.Decimal(15, 2)
+  totalLiabilities Decimal? @db.Decimal(15, 2)
+  totalEquity      Decimal? @db.Decimal(15, 2)
+
+  // Metadata
+  generatedBy     String
+  generatedByUser User     @relation(fields: [generatedBy], references: [id])
+  createdAt       DateTime @default(now())
+
+  // JSON storage for detailed breakdown
+  detailsJson String? // JSON formatted report details
+
+  @@index([reportType])
+  @@index([reportDate])
+}
+
+enum ReportType {
+  PROFIT_LOSS
+  BALANCE_SHEET
+  CASH_FLOW
+  INCOME_SUMMARY
+  EXPENSE_SUMMARY
+  CUSTOMER_SUMMARY
+  SUPPLIER_SUMMARY
+  TAX_SUMMARY
+}

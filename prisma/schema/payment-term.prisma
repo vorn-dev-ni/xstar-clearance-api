@@ -1,0 +1,16 @@
+// ============================================
+// PAYMENT TERMS
+// ============================================
+
+model PaymentTerm {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  termDays    Int
+  description String
+  discount    Decimal? @db.Decimal(5, 2) // percentage
+  isDefault   Boolean  @default(false)
+
+  @@unique([customerId, termDays])
+}

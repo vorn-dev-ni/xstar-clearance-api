@@ -1,0 +1,137 @@
+# CI on every push/PR; deploy to the VPS over SSH (PM2) on pushes to main.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   SSH_HOST          server IP or hostname
+#   SSH_USER          SSH login user (owns the deploy dir)
+#   SSH_PRIVATE_KEY   private key whose public half is in the server's authorized_keys
+#   DEPLOY_PATH       absolute deploy dir, e.g. /var/www/system-x-star-backend
+#   SSH_PORT          (optional) defaults to 22
+#
+# The server keeps its own .env.production inside DEPLOY_PATH — CI never sees it.
+# See DEPLOY.md for one-time server setup.
+
+name: Backend CI & Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PNPM_VERSION: 10.30.3
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm via corepack
+        run: corepack enable && corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+
+      - name: Lint
+        run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts"
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Upload build artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 3
+
+  deploy:
+    needs: ci
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "${SSH_PORT:-22}" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync app bundle
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          RSH="ssh -i ~/.ssh/id_deploy -p ${SSH_PORT:-22}"
+          $RSH "$SSH_USER@$SSH_HOST" "mkdir -p '$DEPLOY_PATH'"
+          # --delete only inside dist/ so server-side .env.production, node_modules
+          # and PM2 state are never touched.
+          rsync -az --delete -e "$RSH" dist/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/dist/"
+          rsync -az -e "$RSH" \
+            prisma prisma.config.ts package.json pnpm-lock.yaml ecosystem.config.js \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+
+      - name: Install, migrate, restart
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" bash -s <<EOF
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          if [ ! -f .env.production ]; then
+            echo "::error::$DEPLOY_PATH/.env.production is missing — create it from .env.example (see DEPLOY.md)"
+            exit 1
+          fi
+
+          corepack enable && corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
+
+          # Full install: the prisma CLI (devDependency) drives generate + migrate.
+          pnpm install --frozen-lockfile
+          pnpm prisma generate
+          NODE_ENV=production pnpm prisma migrate deploy
+
+          pm2 startOrReload ecosystem.config.js --update-env
+          pm2 save
+
+          # Give the app a moment, then verify it answers.
+          sleep 3
+          curl -sf http://localhost:3333/api/health > /dev/null
+          echo "Deploy OK — API healthy."
+          EOF

@@ -1,0 +1,11 @@
+// ============================================
+// SYSTEM ENUMS & COMMON
+// ============================================
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+  RECONCILED
+  CANCELLED
+  VOID
+}

@@ -1,0 +1,30 @@
+// ============================================
+// FILE UPLOADS (S3)
+// ============================================
+
+/// Metadata for a file stored in S3. Uploaded directly by the client via a
+/// presigned URL; `entityType`/`entityId` link it to any record (Invoice,
+/// Patent, ...). `uploadedBy` is a userId (kept as a plain string).
+model FileUpload {
+  id           String           @id @default(cuid())
+  key          String           @unique // S3 object key
+  bucket       String
+  originalName String
+  mimeType     String
+  size         Int?
+  entityType   String? // "Invoice", "Patent", ...
+  entityId     String?
+  status       FileUploadStatus @default(PENDING)
+  uploadedBy   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([uploadedBy])
+}
+
+enum FileUploadStatus {
+  PENDING
+  UPLOADED
+}

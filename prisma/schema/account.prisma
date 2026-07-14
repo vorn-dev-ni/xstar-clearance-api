@@ -1,0 +1,76 @@
+// ============================================
+// ACCOUNTS & CHART OF ACCOUNTS
+// ============================================
+
+model Account {
+  id            String          @id @default(cuid())
+  code          String          @unique // e.g., 4001, 5001
+  nameEn        String
+  nameKh        String?
+  nameCn        String?
+  type          AccountType
+  category      AccountCategory
+  subCategory   String?
+  accountNumber String? // Bank account number if applicable
+  bankName      String?
+  currency      String          @default("USD")
+  balance       Decimal         @default(0) @db.Decimal(15, 2)
+  isActive      Boolean         @default(true)
+  description   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // Relations
+  journalLines   JournalEntryLine[]
+  incomeRecords  IncomeRecord[]
+  expenseRecords ExpenseRecord[]
+  deposits       Deposit[]
+
+  @@index([type])
+  @@index([category])
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+  BANK
+}
+
+enum AccountCategory {
+  // REVENUE
+  OPERATION_REVENUE
+  CUSTOMS_CLEARANCE_FEE
+  STORAGE_FEE
+  TRUCKING_SERVICE
+  BROKERAGE_FEE
+  INTEREST_INCOME
+  OTHER_REVENUE
+
+  // EXPENSES
+  TECHNICAL_OPERATIONS
+  DEPOSITS_PAID
+  HOSPITALITY_ENTERTAINMENT
+  RENTAL_SECURITY
+  CAR_RENTAL
+  OFFICE_SUPPLIES
+  CLEANING_SUPPLIES
+  INTERNET_EMAIL
+  DRINKING_WATER
+  MAINTENANCE_ENERGY
+  UTILITIES
+  NSSF_CONTRIBUTION
+  TAX_EXPENSE
+  WITHHOLDING_TAX
+  BANK_CHARGES
+  DEPRECIATION
+
+  // OTHER
+  BANK_ACCOUNT
+  RECEIVABLES
+  PAYABLES
+  INVENTORY
+  VAT_PAYABLE
+}

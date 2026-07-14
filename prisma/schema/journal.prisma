@@ -1,0 +1,78 @@
+// ============================================
+// JOURNAL ENTRIES (DOUBLE-ENTRY BOOKKEEPING)
+// ============================================
+
+model JournalEntry {
+  id          String   @id @default(cuid())
+  entryNumber String   @unique
+  entryDate   DateTime
+
+  // Reference
+  referenceType ReferenceType
+  referenceId   String? // ID of Income/Expense/Invoice that triggered this
+
+  incomeRecordId String?
+  incomeRecord   IncomeRecord? @relation(fields: [incomeRecordId], references: [id])
+
+  expenseRecordId String?
+  expenseRecord   ExpenseRecord? @relation(fields: [expenseRecordId], references: [id])
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  // Entry details
+  description String
+  memo        String?
+  status      EntryStatus @default(POSTED)
+
+  // Tracking
+  createdBy     String
+  createdByUser User     @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations — a single set of lines; DEBIT/CREDIT distinguished by `entryType`.
+  lines JournalEntryLine[]
+
+  @@index([entryDate])
+  @@index([status])
+  @@index([referenceType])
+}
+
+enum ReferenceType {
+  INCOME
+  EXPENSE
+  INVOICE
+  PAYMENT
+  DEPOSIT
+  MANUAL_ENTRY
+  ADJUSTMENT
+}
+
+enum EntryStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+  ADJUSTED
+}
+
+model JournalEntryLine {
+  id      String       @id @default(cuid())
+  entryId String
+  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id])
+
+  entryType   EntryLineType
+  amount      Decimal       @db.Decimal(15, 2)
+  description String?
+
+  @@index([entryId])
+  @@index([accountId])
+}
+
+enum EntryLineType {
+  DEBIT
+  CREDIT
+}

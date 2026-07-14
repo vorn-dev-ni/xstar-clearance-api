@@ -1,0 +1,33 @@
+// ============================================
+// SETTINGS & CONFIGURATION
+// ============================================
+
+model CompanySettings {
+  id            String  @id @default(cuid())
+  companyNameEn String
+  companyNameKh String?
+  companyNameCn String?
+
+  vatId           String  @unique
+  businessLicense String?
+  taxId           String?
+
+  address  String
+  province String
+  country  String
+
+  phone   String?
+  email   String?
+  website String?
+
+  currency        String @default("USD")
+  fiscalYearStart Int    @default(1) // Month
+
+  defaultVatRate      Decimal @default(10) @db.Decimal(5, 2)
+  defaultPaymentTerms Int     @default(30) // days
+
+  logo String? // URL or base64
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

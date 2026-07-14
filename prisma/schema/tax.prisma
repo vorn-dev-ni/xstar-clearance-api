@@ -1,0 +1,53 @@
+// ============================================
+// TAX FILINGS & RATES
+// ============================================
+
+model TaxFilingRecord {
+  id           String        @id @default(cuid())
+  filingType   TaxFilingType
+  filingPeriod String // e.g., "2026-02"
+
+  taxableIncome Decimal @db.Decimal(15, 2)
+  taxRate       Decimal @db.Decimal(5, 2)
+  taxAmount     Decimal @db.Decimal(15, 2)
+
+  status        FilingStatus @default(DRAFT)
+  filedDate     DateTime?
+  receiptNumber String?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([filingType, filingPeriod])
+}
+
+enum TaxFilingType {
+  VAT
+  INCOME_TAX
+  WITHHOLDING_TAX
+  NSSF
+  QUARTERLY
+  ANNUAL
+}
+
+enum FilingStatus {
+  DRAFT
+  FILED
+  ACCEPTED
+  REJECTED
+  AMENDED
+}
+
+/// Configurable VAT rates (e.g. 10%, 20%). Exactly one row is the default,
+/// used to pre-fill the invoice form.
+model TaxRate {
+  id        String  @id @default(cuid())
+  label     String // e.g. "VAT 10%"
+  rate      Decimal @unique @db.Decimal(5, 2) // percentage: 10, 20
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

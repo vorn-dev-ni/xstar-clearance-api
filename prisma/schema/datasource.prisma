@@ -1,0 +1,18 @@
+// Prisma schema for system-x-star-backend (multi-file — see prisma/schema/).
+// Docs: https://pris.ly/d/prisma-schema
+// Prisma 7: the connection URL lives in `prisma.config.ts`; the runtime client
+// connects via a driver adapter (see src/prisma/prisma.service.ts).
+//
+// Domain: S.T STAR Logistics & Customs Clearance accounting system.
+// Double-entry bookkeeping across income, expense, invoicing, journal, tax and audit.
+//
+// Models are split by domain across sibling *.prisma files; Prisma merges them
+// into one schema. The `generator` and `datasource` blocks live here only.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

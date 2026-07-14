@@ -1,0 +1,86 @@
+// ============================================
+// PAYMENTS & DEPOSITS
+// ============================================
+
+model Payment {
+  id            String   @id @default(cuid())
+  paymentNumber String   @unique
+  paymentDate   DateTime
+  invoiceId     String
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id])
+
+  amount   Decimal       @db.Decimal(15, 2)
+  currency String        @default("USD")
+  method   PaymentMethod
+
+  // Bank details
+  bankName        String?
+  accountNumber   String?
+  referenceNumber String?
+  checkNumber     String?
+
+  notes  String?
+  status PaymentStatus @default(COMPLETED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([paymentDate])
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHECK
+  CREDIT_CARD
+  MOBILE_MONEY
+  CRYPTOCURRENCY
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Deposit {
+  id            String   @id @default(cuid())
+  depositNumber String   @unique
+  depositDate   DateTime
+
+  // Related to
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  amount   Decimal @db.Decimal(15, 2)
+  currency String  @default("USD")
+  purpose  String // e.g., "Operations Deposit", "Security Deposit"
+
+  // Accounting
+  accountId String
+  account   Account       @relation(fields: [accountId], references: [id])
+  status    DepositStatus @default(ACTIVE)
+
+  // Tracking
+  createdBy     String
+  createdByUser User      @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime  @default(now())
+  releasedDate  DateTime?
+  notes         String?
+
+  @@index([customerId])
+  @@index([supplierId])
+  @@index([depositDate])
+}
+
+enum DepositStatus {
+  ACTIVE
+  RELEASED
+  RETURNED
+  FORFEITED
+}

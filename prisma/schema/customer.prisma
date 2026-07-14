@@ -1,0 +1,38 @@
+// ============================================
+// CUSTOMERS
+// ============================================
+
+model Customer {
+  id            String   @id @default(cuid())
+  code          String   @unique // e.g., 027-01-26
+  nameEn        String
+  nameKh        String?
+  nameCn        String?
+  taxId         String?  @unique // VAT/Tax ID
+  address       String
+  commune       String?
+  district      String?
+  province      String?
+  country       String   @default("Cambodia")
+  phone         String?
+  email         String?
+  website       String?
+  contactPerson String?
+  paymentTerms  String?
+  bankAccount   String?
+  bankName      String?
+  isActive      Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  incomeRecords   IncomeRecord[]
+  invoices        Invoice[]
+  deposits        Deposit[]
+  paymentTermsRec PaymentTerm[]
+  clearanceJobs   ClearanceJob[]
+
+  @@index([taxId])
+  @@index([code])
+}

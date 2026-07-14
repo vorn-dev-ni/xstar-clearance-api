@@ -1,0 +1,39 @@
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole  @default(STAFF)
+  department String?
+  phone     String?
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  incomeRecords    IncomeRecord[]
+  incomeReceived   IncomeRecord[]  @relation("IncomeReceivedBy")
+  expenseRecords   ExpenseRecord[]
+  invoices         Invoice[]
+  auditLogs        AuditLog[]
+  deposits         Deposit[]
+  journalEntries   JournalEntry[]
+  financialReports FinancialReport[]
+
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  ADMIN
+  ACCOUNTANT
+  MANAGER
+  STAFF
+  VIEWER
+}

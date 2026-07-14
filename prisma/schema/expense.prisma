@@ -1,0 +1,89 @@
+// ============================================
+// EXPENSES & COSTS
+// ============================================
+
+model ExpenseRecord {
+  id          String      @id @default(cuid())
+  recordNumber String     @unique
+  recordDate  DateTime
+  description String // Expense description
+  expenseType ExpenseType
+
+  // Supplier info
+  supplierId   String?
+  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+  supplierName String? // If no supplier in system
+
+  // Amount
+  amount   Decimal @db.Decimal(15, 2)
+  currency String  @default("USD")
+
+  // Costing statement fields
+  taxRate    Decimal? @db.Decimal(5, 2) // percentage
+  taxAmount  Decimal? @db.Decimal(15, 2)
+  deposit    Decimal? @db.Decimal(15, 2)
+  actualCost Decimal? @db.Decimal(15, 2)
+
+  // Accounting
+  accountId String
+  account   Account           @relation(fields: [accountId], references: [id])
+  status    TransactionStatus @default(PENDING)
+
+  // Invoice/PO reference
+  invoiceNumber   String?
+  poNumber        String?
+  referenceNumber String?
+
+  // Approval
+  approvalStatus  ApprovalStatus @default(PENDING)
+  approvedBy      String?
+  approvalDate    DateTime?
+  rejectionReason String?
+
+  // Details
+  quantity      Int?
+  unitCost      Decimal? @db.Decimal(15, 2)
+  notes         String?
+  attachmentUrl String?
+
+  // Tracking
+  createdBy     String
+  createdByUser User      @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  recordedDate  DateTime?
+
+  // Relations
+  journalEntry JournalEntry[]
+
+  @@index([supplierId])
+  @@index([recordDate])
+  @@index([expenseType])
+  @@index([status])
+  @@index([approvalStatus])
+}
+
+enum ExpenseType {
+  TECHNICAL_OPERATIONS
+  DEPOSITS_PAID
+  HOSPITALITY
+  RENTAL
+  CAR_RENTAL
+  OFFICE_SUPPLIES
+  CLEANING_SUPPLIES
+  INTERNET
+  UTILITIES
+  NSSF_CONTRIBUTION
+  TAX_PAYMENT
+  WITHHOLDING_TAX
+  BANK_CHARGES
+  MAINTENANCE
+  OTHER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+}

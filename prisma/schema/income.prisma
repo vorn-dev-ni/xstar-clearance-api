@@ -1,0 +1,69 @@
+// ============================================
+// INCOME & REVENUE
+// ============================================
+
+model IncomeRecord {
+  id          String      @id @default(cuid())
+  recordNumber String     @unique // Auto-generated
+  recordDate  DateTime
+  description String // Service description
+  serviceType ServiceType
+
+  // Customer info
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  // Amount
+  amount   Decimal @db.Decimal(15, 2)
+  currency String  @default("USD")
+
+  // Invoice/Bill reference (manual input)
+  invoiceNumber   String?
+  billNumber      String? // BL Number, etc.
+  referenceNumber String? // For tracking
+
+  // Company income statement fields
+  receivedFrom     String? // userId of the staff who received it
+  receivedFromUser User?   @relation("IncomeReceivedBy", fields: [receivedFrom], references: [id])
+  balance          Decimal? @db.Decimal(15, 2)
+
+  // Accounting
+  accountId String
+  account   Account           @relation(fields: [accountId], references: [id])
+  status    TransactionStatus @default(PENDING)
+
+  // Details
+  containerCount Int? // For shipping
+  quantity       Int?
+  unitPrice      Decimal? @db.Decimal(15, 2)
+  notes          String?
+  attachmentUrl  String?
+
+  // Tracking
+  createdBy     String
+  createdByUser User      @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  recordedDate  DateTime? // Actual accounting date
+
+  // Relations
+  journalEntry  JournalEntry[]
+  clearanceJobs ClearanceJob[]
+
+  @@index([customerId])
+  @@index([recordDate])
+  @@index([serviceType])
+  @@index([status])
+}
+
+enum ServiceType {
+  CUSTOMS_CLEARANCE
+  STORAGE_FEE
+  LICENSE_FEE
+  TRUCKING_SERVICE
+  LOGISTICS_SERVICE
+  BONDED_WAREHOUSE
+  BROKERAGE_SERVICE
+  REFUND
+  OTHER
+}
