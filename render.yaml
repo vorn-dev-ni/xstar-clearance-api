@@ -5,3 +5,8 @@ services:
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
     startCommand: pnpm start:prod
     healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        value: http://localhost:3000,https://xstar-clearance-admin.vercel.app
