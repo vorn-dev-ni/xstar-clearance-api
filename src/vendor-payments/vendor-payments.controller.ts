@@ -16,10 +16,7 @@ export class VendorPaymentsController {
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
-  create(
-    @Body() dto: CreateVendorPaymentDto,
-    @CurrentUser() user: AuthUser,
-  ) {
+  create(@Body() dto: CreateVendorPaymentDto, @CurrentUser() user: AuthUser) {
     return this.vendorPayments.create(dto, user.userId);
   }
 

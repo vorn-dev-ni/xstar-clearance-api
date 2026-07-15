@@ -11,7 +11,9 @@ export class ConvertDealDto {
   @IsISO8601()
   date?: string;
 
-  @ApiPropertyOptional({ description: 'Manual job number; auto-generated when omitted' })
+  @ApiPropertyOptional({
+    description: 'Manual job number; auto-generated when omitted',
+  })
   @IsOptional()
   @IsString()
   jobNumber?: string;

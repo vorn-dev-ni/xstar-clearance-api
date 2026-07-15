@@ -14,12 +14,16 @@ export class CreateVendorPaymentDto {
   @IsISO8601()
   paymentDate!: string;
 
-  @ApiPropertyOptional({ description: 'Supplier being paid (if in the system)' })
+  @ApiPropertyOptional({
+    description: 'Supplier being paid (if in the system)',
+  })
   @IsOptional()
   @IsString()
   supplierId?: string;
 
-  @ApiPropertyOptional({ description: 'Free-text vendor name if not a Supplier' })
+  @ApiPropertyOptional({
+    description: 'Free-text vendor name if not a Supplier',
+  })
   @IsOptional()
   @IsString()
   supplierName?: string;

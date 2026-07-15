@@ -48,7 +48,14 @@ export class DealsService {
         where,
         include: {
           customer: { select: { nameEn: true } },
-          salesperson: { select: { id: true, firstName: true, lastName: true } },
+          salesperson: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          clearanceJobs: {
+            select: { id: true, jobNumber: true },
+            orderBy: { date: 'desc' },
+            take: 1,
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -89,6 +96,11 @@ export class DealsService {
     const deal = await this.findOne(id);
     if (deal.status === DealStatus.LOST) {
       throw new UnprocessableEntityException('A lost deal cannot be converted');
+    }
+    if (deal.clearanceJobs.length > 0) {
+      throw new UnprocessableEntityException(
+        'This deal has already been converted to a job',
+      );
     }
 
     const job = await this.operations.create(
