@@ -19,7 +19,21 @@ export class OperationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateClearanceJobDto, userId: string) {
-    const { recordItems, expenseItems, ...rest } = dto;
+    const {
+      recordItems,
+      expenseItems,
+      id: _id,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      createdBy: _createdBy,
+      customer: _customer,
+      assignedStaffUser: _assignedStaffUser,
+      incomeRecord: _incomeRecord,
+      expenses: _expenses,
+      incomes: _incomes,
+      financials: _financials,
+      ...rest
+    } = dto as Record<string, any>;
     try {
       return await this.prisma.$transaction(async (tx) => {
         const jobNumber =
@@ -51,7 +65,7 @@ export class OperationsService {
             status: dto.status ?? JobStatus.NEW,
             createdBy: userId,
             ...itemWrites(recordItems, expenseItems),
-          },
+          } as Prisma.ClearanceJobUncheckedCreateInput,
         });
       });
     } catch (e) {
@@ -174,8 +188,22 @@ export class OperationsService {
 
   async update(id: string, dto: UpdateClearanceJobDto) {
     await this.findOne(id);
-    const { recordItems, expenseItems, ...rest } = dto;
-    delete (rest as Record<string, unknown>).jobNumber;
+    const {
+      recordItems,
+      expenseItems,
+      id: _id,
+      jobNumber: _jobNumber,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      createdBy: _createdBy,
+      customer: _customer,
+      assignedStaffUser: _assignedStaffUser,
+      incomeRecord: _incomeRecord,
+      expenses: _expenses,
+      incomes: _incomes,
+      financials: _financials,
+      ...rest
+    } = dto as Record<string, any>;
 
     let assignedStaffName = rest.assignedStaff;
     if (rest.assignedStaffId && rest.assignedStaff === undefined) {
@@ -212,9 +240,14 @@ export class OperationsService {
               }
             : {}),
           ...(expenseItems !== undefined
-            ? { expenseItems: { deleteMany: {}, create: expenseItems } }
+            ? {
+                expenseItems: {
+                  deleteMany: {},
+                  create: expenseItems.map(cleanExpenseItem),
+                },
+              }
             : {}),
-        },
+        } as Prisma.ClearanceJobUncheckedUpdateInput,
       });
     } catch (e) {
       throw this.mapUniqueError(e);
@@ -242,8 +275,24 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function withComputedAmount(item: BillRecordItemDto) {
-  return { ...item, amount: round2(item.quantity * item.unitPrice) };
+function withComputedAmount(item: BillRecordItemDto, idx: number) {
+  const { id, clearanceJobId, ...cleanItem } = item as Record<string, any>;
+  return {
+    ...cleanItem,
+    itemNumber: cleanItem.itemNumber ?? idx + 1,
+    amount: round2(
+      Number(cleanItem.quantity ?? 0) * Number(cleanItem.unitPrice ?? 0),
+    ),
+  };
+}
+
+function cleanExpenseItem(item: BillExpenseItemDto, idx: number) {
+  const { id, clearanceJobId, ...cleanItem } = item as Record<string, any>;
+  return {
+    ...cleanItem,
+    itemNumber: cleanItem.itemNumber ?? idx + 1,
+    amount: round2(Number(cleanItem.amount ?? 0)),
+  };
 }
 
 function itemWrites(
@@ -254,7 +303,9 @@ function itemWrites(
     ...(recordItems?.length
       ? { recordItems: { create: recordItems.map(withComputedAmount) } }
       : {}),
-    ...(expenseItems?.length ? { expenseItems: { create: expenseItems } } : {}),
+    ...(expenseItems?.length
+      ? { expenseItems: { create: expenseItems.map(cleanExpenseItem) } }
+      : {}),
   };
 }
 

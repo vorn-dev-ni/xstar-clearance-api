@@ -15,10 +15,21 @@ import {
 } from 'class-validator';
 
 export class BillRecordItemDto {
-  @ApiProperty({ example: 1 })
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  clearanceJobId?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
   @IsInt()
-  @Min(1)
-  itemNumber!: number;
+  @Min(0)
+  itemNumber?: number;
 
   @ApiProperty({ example: 'HAND TOWEL 40x70' })
   @IsString()
@@ -26,20 +37,36 @@ export class BillRecordItemDto {
 
   @ApiProperty({ example: 120 })
   @IsNumber({ maxDecimalPlaces: 4 })
-  @IsPositive()
+  @Min(0)
   quantity!: number;
 
   @ApiProperty({ example: 2.5 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   unitPrice!: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  amount?: number;
 }
 
 export class BillExpenseItemDto {
-  @ApiProperty({ example: 1 })
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  clearanceJobId?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
   @IsInt()
-  @Min(1)
-  itemNumber!: number;
+  @Min(0)
+  itemNumber?: number;
 
   @ApiProperty({ example: 'Port handling fee' })
   @IsString()
@@ -252,4 +279,46 @@ export class CreateClearanceJobDto {
   @ValidateNested({ each: true })
   @Type(() => BillExpenseItemDto)
   expenseItems?: BillExpenseItemDto[];
+
+  @ApiPropertyOptional({ description: 'Read-only job ID if passed by client' })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @ApiPropertyOptional({ description: 'Read-only customer object if passed by client' })
+  @IsOptional()
+  customer?: unknown;
+
+  @ApiPropertyOptional({ description: 'Read-only staff user object if passed by client' })
+  @IsOptional()
+  assignedStaffUser?: unknown;
+
+  @ApiPropertyOptional({ description: 'Read-only income record object if passed by client' })
+  @IsOptional()
+  incomeRecord?: unknown;
+
+  @ApiPropertyOptional({ description: 'Read-only expenses array if passed by client' })
+  @IsOptional()
+  expenses?: unknown;
+
+  @ApiPropertyOptional({ description: 'Read-only incomes array if passed by client' })
+  @IsOptional()
+  incomes?: unknown;
+
+  @ApiPropertyOptional({ description: 'Read-only financials object if passed by client' })
+  @IsOptional()
+  financials?: unknown;
+
+  @ApiPropertyOptional({ description: 'Read-only createdBy if passed by client' })
+  @IsOptional()
+  @IsString()
+  createdBy?: string;
+
+  @ApiPropertyOptional({ description: 'Read-only createdAt if passed by client' })
+  @IsOptional()
+  createdAt?: unknown;
+
+  @ApiPropertyOptional({ description: 'Read-only updatedAt if passed by client' })
+  @IsOptional()
+  updatedAt?: unknown;
 }

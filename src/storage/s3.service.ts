@@ -62,7 +62,28 @@ export class S3Service {
         Key: key,
         ContentType: contentType,
       }),
-      { expiresIn: this.expiresIn },
+      {
+        expiresIn: this.expiresIn,
+        signableHeaders: new Set(['host', 'content-type']),
+        unhoistableHeaders: new Set([
+          'x-amz-sdk-checksum-algorithm',
+          'x-amz-checksum-crc32',
+          'x-amz-checksum-crc32c',
+          'x-amz-checksum-sha1',
+          'x-amz-checksum-sha256',
+          'x-amz-checksum-mode',
+          'x-id',
+        ]),
+        unsignableHeaders: new Set([
+          'x-amz-sdk-checksum-algorithm',
+          'x-amz-checksum-crc32',
+          'x-amz-checksum-crc32c',
+          'x-amz-checksum-sha1',
+          'x-amz-checksum-sha256',
+          'x-amz-checksum-mode',
+          'x-id',
+        ]),
+      },
     );
   }
 
@@ -71,7 +92,28 @@ export class S3Service {
     return getSignedUrl(
       this.client,
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-      { expiresIn: this.expiresIn },
+      {
+        expiresIn: this.expiresIn,
+        signableHeaders: new Set(['host']),
+        unhoistableHeaders: new Set([
+          'x-amz-sdk-checksum-algorithm',
+          'x-amz-checksum-crc32',
+          'x-amz-checksum-crc32c',
+          'x-amz-checksum-sha1',
+          'x-amz-checksum-sha256',
+          'x-amz-checksum-mode',
+          'x-id',
+        ]),
+        unsignableHeaders: new Set([
+          'x-amz-sdk-checksum-algorithm',
+          'x-amz-checksum-crc32',
+          'x-amz-checksum-crc32c',
+          'x-amz-checksum-sha1',
+          'x-amz-checksum-sha256',
+          'x-amz-checksum-mode',
+          'x-id',
+        ]),
+      },
     );
   }
 
