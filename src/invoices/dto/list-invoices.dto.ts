@@ -19,6 +19,11 @@ export class ListInvoicesDto extends PaginationQueryDto {
   @IsString()
   customerId?: string;
 
+  @ApiPropertyOptional({ description: 'Only invoices for this clearance job' })
+  @IsOptional()
+  @IsString()
+  clearanceJobId?: string;
+
   @ApiPropertyOptional({ description: 'Match by invoice number' })
   @IsOptional()
   @IsString()

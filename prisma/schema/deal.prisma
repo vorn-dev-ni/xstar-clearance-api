@@ -1,0 +1,54 @@
+// ============================================
+// SALES / CRM — clearance deals (opportunities)
+// ============================================
+
+/// A sales opportunity that precedes a clearance job (step 1 of the flow).
+/// When the customer accepts, the deal is `convert`ed to a ClearanceJob and its
+/// status moves to WON. `dealNumber` is auto-generated (DEAL-NNNNNN).
+model Deal {
+  id         String     @id @default(cuid())
+  dealNumber String     @unique // DEAL-000123
+  status     DealStatus @default(OPPORTUNITY)
+
+  // Customer
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  // Shipment outline (all optional — refined into the job later)
+  originCountry      String?
+  originPort         String?
+  destinationCountry String?
+  destinationPort    String?
+  shipmentType       String? // IMP / EXP
+  transportMode      TransportMode?
+
+  // Commercials
+  estimatedRevenue Decimal? @db.Decimal(15, 2)
+  currency         String   @default("USD")
+
+  // Salesperson
+  salespersonId String?
+  salesperson   User?   @relation("DealSalesperson", fields: [salespersonId], references: [id], onDelete: SetNull)
+
+  notes String?
+
+  // Tracking
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Jobs created from this deal (usually one)
+  clearanceJobs ClearanceJob[]
+
+  @@index([customerId])
+  @@index([salespersonId])
+  @@index([status])
+  @@index([dealNumber])
+}
+
+enum DealStatus {
+  OPPORTUNITY
+  QUOTED
+  WON
+  LOST
+}

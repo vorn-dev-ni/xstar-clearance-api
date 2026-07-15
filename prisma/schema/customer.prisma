@@ -38,6 +38,7 @@ model Customer {
   deposits        Deposit[]
   paymentTermsRec PaymentTerm[]
   clearanceJobs   ClearanceJob[]
+  deals           Deal[]
 
   @@index([taxId])
   @@index([code])

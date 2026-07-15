@@ -58,6 +58,7 @@ export class InvoicesService {
           invoiceDate: new Date(dto.invoiceDate),
           dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
           customerId: dto.customerId,
+          clearanceJobId: dto.clearanceJobId,
           invoiceType,
           underCompanyTitle: !isDebitNote,
           subtotal,
@@ -117,6 +118,7 @@ export class InvoicesService {
       status: query.status,
       invoiceType: query.invoiceType,
       customerId: query.customerId,
+      clearanceJobId: query.clearanceJobId,
       invoiceNumber: query.search
         ? { contains: query.search, mode: 'insensitive' }
         : undefined,

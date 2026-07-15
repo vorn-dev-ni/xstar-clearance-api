@@ -1,0 +1,48 @@
+// ============================================
+// VENDOR PAYMENTS — settle Accounts Payable
+// ============================================
+
+/// A payment made to a supplier/vendor. Posts DR A/P (2100) / CR Bank (1100),
+/// clearing the payable that an approved ExpenseRecord created. May reference a
+/// clearance job (step 9: "each vendor payment stores Job = IMP-2026-00451") and
+/// optionally settle a specific ExpenseRecord bill.
+model VendorPayment {
+  id            String   @id @default(cuid())
+  paymentNumber String   @unique // VPAY-YYYY-NNNN
+  paymentDate   DateTime
+
+  // Payee
+  supplierId   String?
+  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+  supplierName String? // if the vendor is not a Supplier record
+
+  // Optional links
+  clearanceJobId String?
+  clearanceJob   ClearanceJob? @relation(fields: [clearanceJobId], references: [id])
+  expenseRecordId String?
+  expenseRecord   ExpenseRecord? @relation(fields: [expenseRecordId], references: [id])
+
+  amount   Decimal       @db.Decimal(15, 2)
+  currency String        @default("USD")
+  method   PaymentMethod
+
+  // Bank / reference details
+  bankName        String?
+  accountNumber   String?
+  referenceNumber String?
+  checkNumber     String?
+
+  notes  String?
+  status PaymentStatus @default(COMPLETED)
+
+  // Tracking
+  createdBy     String
+  createdByUser User     @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([supplierId])
+  @@index([clearanceJobId])
+  @@index([expenseRecordId])
+  @@index([paymentDate])
+}

@@ -28,6 +28,7 @@ model Supplier {
   // Relations
   expenseRecords ExpenseRecord[]
   deposits       Deposit[]
+  vendorPayments VendorPayment[]
 
   @@index([taxId])
   @@index([code])

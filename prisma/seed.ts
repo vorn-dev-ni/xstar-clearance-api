@@ -475,6 +475,9 @@ async function main(): Promise<void> {
   }
   console.log(`✅ Seeded ${CUSTOMERS.length} customers`);
 
+  // Transactional demo data (bills, expenses, income, invoices, payments). Skipped
+  // when SEED_TRANSACTIONS=false so a fresh DB can be walked through the flow from scratch.
+  if (process.env.SEED_TRANSACTIONS !== 'false') {
   // 7. Operations — Customs Clearance Jobs register.
   const now = new Date();
   const CLEARANCE_JOBS = [
@@ -1042,7 +1045,10 @@ async function main(): Promise<void> {
     }
   }
   console.log(`✅ Seeded ${INVOICES.length} invoices with detailed line items and payments`);
-  console.log('\n🌟 Seeding complete! Database is fully populated for live client demo on Neon DB.');
+  } else {
+    console.log('⏭️  Skipped transactional data (SEED_TRANSACTIONS=false) — bills, expenses, income, invoices, payments');
+  }
+  console.log('\n🌟 Seeding complete!');
 }
 
 main()

@@ -53,6 +53,13 @@ export class CreateInvoiceDto {
   customerId!: string;
 
   @ApiPropertyOptional({
+    description: 'Link this invoice to the clearance job it bills for',
+  })
+  @IsOptional()
+  @IsString()
+  clearanceJobId?: string;
+
+  @ApiPropertyOptional({
     enum: InvoiceType,
     default: InvoiceType.TAX_INVOICE,
     description: 'DEBIT_NOTE carries no VAT and is not under company title',

@@ -17,6 +17,10 @@ model ClearanceJob {
   customer     Customer @relation(fields: [customerId], references: [id])
   customerName String? // manual/denormalized display
 
+  // Optional link: job originated from a sales deal (step 1 → 2)
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id])
+
   sizeVolume      String?
   invoiceNumber   String?
   blBookingNumber String? // e.g. 026F5222213
@@ -58,16 +62,19 @@ model ClearanceJob {
   totalAmount        Decimal?  @db.Decimal(15, 2) // agreed total incl. tax & expenses
   depositAmount      Decimal?  @db.Decimal(15, 2) // client prepayment
 
-  expenses     ExpenseRecord[]
-  incomes      IncomeRecord[]    @relation("JobIncomes")
-  recordItems  BillRecordItem[]
-  expenseItems BillExpenseItem[]
+  expenses       ExpenseRecord[]
+  incomes        IncomeRecord[]    @relation("JobIncomes")
+  invoices       Invoice[]
+  vendorPayments VendorPayment[]
+  recordItems    BillRecordItem[]
+  expenseItems   BillExpenseItem[]
 
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([customerId])
+  @@index([dealId])
   @@index([assignedStaffId])
   @@index([date])
   @@index([jobNumber])

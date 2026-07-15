@@ -24,9 +24,11 @@ model User {
   invoices         Invoice[]
   auditLogs        AuditLog[]
   deposits         Deposit[]
+  vendorPayments   VendorPayment[]
   journalEntries   JournalEntry[]
   financialReports FinancialReport[]
   assignedClearanceJobs ClearanceJob[] @relation("JobAssignedStaff")
+  deals                 Deal[]         @relation("DealSalesperson")
 
   @@index([email])
   @@index([role])
