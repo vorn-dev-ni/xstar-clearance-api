@@ -28,7 +28,6 @@ model User {
   journalEntries   JournalEntry[]
   financialReports FinancialReport[]
   assignedClearanceJobs ClearanceJob[] @relation("JobAssignedStaff")
-  deals                 Deal[]         @relation("DealSalesperson")
 
   @@index([email])
   @@index([role])

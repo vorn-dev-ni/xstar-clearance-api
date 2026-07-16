@@ -110,11 +110,6 @@ export class CreateClearanceJobDto {
   @IsString()
   customerName?: string;
 
-  @ApiPropertyOptional({ description: 'Sales deal this job originated from' })
-  @IsOptional()
-  @IsString()
-  dealId?: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

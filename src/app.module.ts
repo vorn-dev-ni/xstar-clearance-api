@@ -9,7 +9,6 @@ import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { validate, type Env } from './config/env.validation';
 import { CustomersModule } from './customers/customers.module';
-import { DealsModule } from './deals/deals.module';
 import { DepositsModule } from './deposits/deposits.module';
 import { ExpenseModule } from './expense/expense.module';
 import { HealthModule } from './health/health.module';
@@ -68,7 +67,6 @@ import { VendorPaymentsModule } from './vendor-payments/vendor-payments.module';
     UsersModule,
     OperationsModule,
     VendorPaymentsModule,
-    DealsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
