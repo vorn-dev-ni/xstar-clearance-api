@@ -3,14 +3,23 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { AuditAction, FileUploadStatus } from '@prisma/client';
+import { AuditAction, FileUpload, FileUploadStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
+import { CreateUploadDto } from './dto/create-upload.dto';
 import { ListUploadsDto } from './dto/list-uploads.dto';
 import { PresignUploadDto } from './dto/presign-upload.dto';
 import { UpdateUploadDto } from './dto/update-upload.dto';
+
+/** The subset of a Multer file we rely on (avoids a @types/multer dependency). */
+export interface UploadedFileLike {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
 
 /** Images + business documents. Anything else is rejected at presign. */
 export const ALLOWED_MIME_TYPES = [
@@ -35,6 +44,53 @@ export class UploadsService {
     private readonly s3: S3Service,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Proxied upload: receive the bytes, push them to S3 server-side, and persist
+   * an already-UPLOADED record. This is the primary upload path (no browser→S3
+   * CORS involved). The presign/confirm pair below is kept for compatibility.
+   */
+  async create(file: UploadedFileLike, dto: CreateUploadDto, userId: string) {
+    if (!(ALLOWED_MIME_TYPES as readonly string[]).includes(file.mimetype)) {
+      throw new UnprocessableEntityException(
+        `File type ${file.mimetype} is not allowed. Allowed: ${ALLOWED_MIME_TYPES.join(', ')}`,
+      );
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      throw new UnprocessableEntityException(
+        `File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit`,
+      );
+    }
+    const key = this.s3.buildKey(dto.entityType, file.originalname);
+    await this.s3.putObject(key, file.buffer, file.mimetype);
+    const record = await this.prisma.fileUpload.create({
+      data: {
+        key,
+        bucket: this.s3.bucket,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        entityType: dto.entityType,
+        entityId: dto.entityId,
+        documentType: dto.documentType,
+        uploadedBy: userId,
+        status: FileUploadStatus.UPLOADED,
+      },
+    });
+    await this.audit.log({
+      userId,
+      entityType: 'FileUpload',
+      entityId: record.id,
+      action: AuditAction.CREATE,
+      after: {
+        key: record.key,
+        entityType: record.entityType,
+        entityId: record.entityId,
+      },
+    });
+    await this.linkToEntity(record);
+    return record;
+  }
 
   /**
    * Reserve a storage key, persist a PENDING record, and hand back a presigned
@@ -102,6 +158,16 @@ export class UploadsService {
       },
     });
 
+    await this.linkToEntity(file);
+
+    return updated;
+  }
+
+  /**
+   * Reflect an uploaded file onto its owning record (avatar / representative
+   * image). Missing targets are ignored — the file itself is still stored.
+   */
+  private async linkToEntity(file: FileUpload) {
     if (
       file.entityType === 'Customer' &&
       file.entityId &&
@@ -125,8 +191,6 @@ export class UploadsService {
         // Ignore if user not found
       }
     }
-
-    return updated;
   }
 
   /** Presigned download URL for a stored file. */

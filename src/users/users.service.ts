@@ -7,11 +7,15 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Service } from '../storage/s3.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersDto } from './dto/list-users.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 const SALT_ROUNDS = 10;
+
+/** A user row as selected by `publicSelect` (avatarUrl still an S3 key). */
+type PublicUser = Prisma.UserGetPayload<{ select: typeof publicSelect }>;
 
 /** Fields safe to return to clients — never the password hash. */
 const publicSelect = {
@@ -30,7 +34,16 @@ const publicSelect = {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly s3: S3Service,
+  ) {}
+
+  /** `avatarUrl` stores an S3 object key — resolve it to a presigned GET URL. */
+  private async withAvatar<T extends PublicUser>(user: T): Promise<T> {
+    if (!user.avatarUrl) return user;
+    return { ...user, avatarUrl: await this.s3.presignGet(user.avatarUrl) };
+  }
 
   async create(dto: CreateUserDto) {
     const existing = await this.prisma.user.findUnique({
@@ -40,7 +53,7 @@ export class UsersService {
       throw new ConflictException('A user with this email already exists');
     }
     const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
-    return this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         password,
@@ -52,6 +65,7 @@ export class UsersService {
       },
       select: publicSelect,
     });
+    return this.withAvatar(user);
   }
 
   async findAll(query: ListUsersDto) {
@@ -78,7 +92,10 @@ export class UsersService {
       }),
       this.prisma.user.count({ where }),
     ]);
-    return { data, pagination: paginationMeta(total, query.page, query.limit) };
+    return {
+      data: await Promise.all(data.map((u) => this.withAvatar(u))),
+      pagination: paginationMeta(total, query.page, query.limit),
+    };
   }
 
   async findOne(id: string) {
@@ -87,15 +104,16 @@ export class UsersService {
       select: publicSelect,
     });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    return this.withAvatar(user);
   }
 
   async update(id: string, dto: UpdateUserDto) {
     await this.findOne(id);
-    return this.prisma.user.update({
+    const user = await this.prisma.user.update({
       where: { id },
       data: dto,
       select: publicSelect,
     });
+    return this.withAvatar(user);
   }
 }

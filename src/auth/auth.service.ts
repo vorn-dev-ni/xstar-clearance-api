@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Service } from '../storage/s3.service';
 import type { AuthUser, JwtPayload } from './auth.types';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -18,7 +19,20 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly s3: S3Service,
   ) {}
+
+  /** Session user for API responses (avatarUrl key resolved to a presigned URL). */
+  private async toSessionUser(user: User) {
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatarUrl: user.avatarUrl ? await this.s3.presignGet(user.avatarUrl) : null,
+    };
+  }
 
   async register(dto: RegisterDto) {
     const existing = await this.prisma.user.findUnique({
@@ -69,7 +83,7 @@ export class AuthService {
 
     return {
       token: this.sign(user),
-      user: { id: user.id, email: user.email, role: user.role },
+      user: await this.toSessionUser(user),
     };
   }
 
@@ -81,7 +95,7 @@ export class AuthService {
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User no longer active');
     }
-    return { token: this.sign(user) };
+    return { token: this.sign(user), user: await this.toSessionUser(user) };
   }
 
   private sign(user: User): string {

@@ -36,15 +36,10 @@ export class S3Service {
     });
   }
 
-  /** Lifetime (seconds) of the presigned URLs this service issues. */
   get presignExpiry(): number {
     return this.expiresIn;
   }
 
-  /**
-   * A collision-free object key, namespaced by entity. Filenames are sanitized
-   * to a safe subset so a hostile name can't escape the prefix.
-   */
   buildKey(entityType: string | undefined, fileName: string): string {
     const folder = (entityType ?? 'misc')
       .toLowerCase()
@@ -53,7 +48,22 @@ export class S3Service {
     return `uploads/${folder || 'misc'}/${randomUUID()}-${safeName}`;
   }
 
-  /** Presigned URL the client PUTs the file bytes to. */
+  /** Upload bytes to S3 server-side (used by the proxied upload endpoint). */
+  async putObject(
+    key: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+  }
+
   presignPut(key: string, contentType: string): Promise<string> {
     return getSignedUrl(
       this.client,

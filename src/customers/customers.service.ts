@@ -4,22 +4,38 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Customer, Prisma } from '@prisma/client';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Service } from '../storage/s3.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { ListCustomersDto } from './dto/list-customers.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly s3: S3Service,
+  ) {}
+
+  /** `representativeImageUrl` stores an S3 key — resolve to a presigned GET URL. */
+  private async withImage(customer: Customer): Promise<Customer> {
+    if (!customer.representativeImageUrl) return customer;
+    return {
+      ...customer,
+      representativeImageUrl: await this.s3.presignGet(
+        customer.representativeImageUrl,
+      ),
+    };
+  }
 
   async create(dto: CreateCustomerDto) {
     try {
-      return await this.prisma.customer.create({
+      const customer = await this.prisma.customer.create({
         data: { ...dto, registrationDate: new Date(dto.registrationDate) },
       });
+      return this.withImage(customer);
     } catch (e) {
       throw this.mapUniqueError(e);
     }
@@ -48,17 +64,24 @@ export class CustomersService {
       }),
       this.prisma.customer.count({ where }),
     ]);
-    return { data, pagination: paginationMeta(total, query.page, query.limit) };
+    return {
+      data: await Promise.all(data.map((c) => this.withImage(c))),
+      pagination: paginationMeta(total, query.page, query.limit),
+    };
   }
 
-  async findOne(id: string) {
+  private async findRaw(id: string) {
     const customer = await this.prisma.customer.findUnique({ where: { id } });
     if (!customer) throw new NotFoundException('Customer not found');
     return customer;
   }
 
+  async findOne(id: string) {
+    return this.withImage(await this.findRaw(id));
+  }
+
   async update(id: string, dto: UpdateCustomerDto) {
-    const existing = await this.findOne(id);
+    const existing = await this.findRaw(id);
     if (
       dto.isActive !== undefined &&
       dto.isActive !== existing.isActive &&
