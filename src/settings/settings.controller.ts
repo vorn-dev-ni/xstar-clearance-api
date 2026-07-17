@@ -9,8 +9,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateTaxRateDto } from './dto/create-tax-rate.dto';
 import { UpdateCompanySettingsDto } from './dto/update-company-settings.dto';
 import { UpdateTaxRateDto } from './dto/update-tax-rate.dto';
@@ -30,26 +29,26 @@ export class SettingsController {
   }
 
   @Post('tax-rates')
-  @Roles(UserRole.ADMIN)
+  @RequirePermission('settings.edit')
   createTaxRate(@Body() dto: CreateTaxRateDto) {
     return this.settings.createTaxRate(dto);
   }
 
   @Patch('tax-rates/:id')
-  @Roles(UserRole.ADMIN)
+  @RequirePermission('settings.edit')
   updateTaxRate(@Param('id') id: string, @Body() dto: UpdateTaxRateDto) {
     return this.settings.updateTaxRate(id, dto);
   }
 
   @Post('tax-rates/:id/default')
   @HttpCode(200)
-  @Roles(UserRole.ADMIN)
+  @RequirePermission('settings.edit')
   setDefaultTaxRate(@Param('id') id: string) {
     return this.settings.setDefaultTaxRate(id);
   }
 
   @Delete('tax-rates/:id')
-  @Roles(UserRole.ADMIN)
+  @RequirePermission('settings.edit')
   removeTaxRate(@Param('id') id: string) {
     return this.settings.removeTaxRate(id);
   }
@@ -62,7 +61,7 @@ export class SettingsController {
   }
 
   @Patch('settings/company')
-  @Roles(UserRole.ADMIN)
+  @RequirePermission('settings.edit')
   updateCompanySettings(@Body() dto: UpdateCompanySettingsDto) {
     return this.settings.updateCompanySettings(dto);
   }

@@ -8,8 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersDto } from './dto/list-users.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -17,12 +16,13 @@ import { UsersService } from './users.service';
 
 @ApiTags('users')
 @ApiBearerAuth()
+@RequirePermission('users.view')
 @Controller('users')
-@Roles(UserRole.ADMIN)
 export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Post()
+  @RequirePermission('users.edit')
   create(@Body() dto: CreateUserDto) {
     return this.users.create(dto);
   }
@@ -38,6 +38,7 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @RequirePermission('users.edit')
   update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.users.update(id, dto);
   }

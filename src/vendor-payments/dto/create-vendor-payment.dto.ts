@@ -52,6 +52,11 @@ export class CreateVendorPaymentDto {
   @IsEnum(PaymentMethod)
   method!: PaymentMethod;
 
+  @ApiPropertyOptional({ description: 'Bank account id the money went out of' })
+  @IsOptional()
+  @IsString()
+  bankAccountId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

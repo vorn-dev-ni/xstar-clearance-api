@@ -32,6 +32,7 @@ export class VendorPaymentsService {
           amount: dto.amount,
           currency: dto.currency,
           method: dto.method,
+          bankAccountId: dto.bankAccountId,
           bankName: dto.bankName,
           accountNumber: dto.accountNumber,
           referenceNumber: dto.referenceNumber,
@@ -45,7 +46,9 @@ export class VendorPaymentsService {
         tx,
         ACCOUNT_CODES.ACCOUNTS_PAYABLE,
       );
-      const bankId = await this.journal.accountIdByCode(tx, ACCOUNT_CODES.BANK);
+      const bankId =
+        dto.bankAccountId ??
+        (await this.journal.accountIdByCode(tx, ACCOUNT_CODES.BANK));
       await this.journal.postJournal(tx, {
         entryDate: new Date(dto.paymentDate),
         description: `Vendor payment ${payment.paymentNumber}${

@@ -10,11 +10,10 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { ExportFormat } from '../reports/dto/report-query.dto';
 import { CreateIncomeDto } from './dto/create-income.dto';
 import { ExportIncomeDto } from './dto/export-income.dto';
@@ -25,6 +24,7 @@ import { IncomeService } from './income.service';
 
 @ApiTags('income')
 @ApiBearerAuth()
+@RequirePermission('accounting.view')
 @Controller('income')
 export class IncomeController {
   constructor(
@@ -33,7 +33,7 @@ export class IncomeController {
   ) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.STAFF)
+  @RequirePermission('accounting.edit')
   create(@Body() dto: CreateIncomeDto, @CurrentUser() user: AuthUser) {
     return this.income.create(dto, user.userId);
   }
@@ -75,7 +75,7 @@ export class IncomeController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.STAFF)
+  @RequirePermission('accounting.edit')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateIncomeDto,
@@ -86,7 +86,7 @@ export class IncomeController {
 
   @Post(':id/approve')
   @HttpCode(200)
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @RequirePermission('accounting.action')
   approve(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.income.approve(id, user.userId);
   }

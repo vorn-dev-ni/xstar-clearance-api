@@ -26,6 +26,10 @@ model VendorPayment {
   currency String        @default("USD")
   method   PaymentMethod
 
+  // Bank account the money went out of (drives the journal's bank leg)
+  bankAccountId String?
+  bankAccount   Account? @relation("VendorPaymentBankAccount", fields: [bankAccountId], references: [id])
+
   // Bank / reference details
   bankName        String?
   accountNumber   String?
@@ -44,5 +48,6 @@ model VendorPayment {
   @@index([supplierId])
   @@index([clearanceJobId])
   @@index([expenseRecordId])
+  @@index([bankAccountId])
   @@index([paymentDate])
 }

@@ -13,6 +13,10 @@ model Payment {
   currency String        @default("USD")
   method   PaymentMethod
 
+  // Bank account the money landed in (drives the journal's bank leg)
+  bankAccountId String?
+  bankAccount   Account? @relation("PaymentBankAccount", fields: [bankAccountId], references: [id])
+
   // Bank details
   bankName        String?
   accountNumber   String?
@@ -26,6 +30,7 @@ model Payment {
   updatedAt DateTime @updatedAt
 
   @@index([invoiceId])
+  @@index([bankAccountId])
   @@index([paymentDate])
 }
 
@@ -56,30 +61,38 @@ model Deposit {
   supplierId String?
   supplier   Supplier? @relation(fields: [supplierId], references: [id])
 
+  // Optional link: the shipment file (Bill) this container deposit belongs to
+  clearanceJobId String?
+  clearanceJob   ClearanceJob? @relation(fields: [clearanceJobId], references: [id])
+
   amount   Decimal @db.Decimal(15, 2)
   currency String  @default("USD")
-  purpose  String // e.g., "Operations Deposit", "Security Deposit"
+  purpose  String // e.g., "Container Deposit", "Shipping Line Deposit"
 
   // Accounting
   accountId String
-  account   Account       @relation(fields: [accountId], references: [id])
-  status    DepositStatus @default(ACTIVE)
+  account   Account                @relation(fields: [accountId], references: [id])
+  status    ContainerDepositStatus @default(EIR_DOCS_COLLECTED)
 
   // Tracking
   createdBy     String
   createdByUser User      @relation(fields: [createdBy], references: [id])
   createdAt     DateTime  @default(now())
-  releasedDate  DateTime?
+  releasedDate  DateTime? // date the deposit was refunded
   notes         String?
 
   @@index([customerId])
   @@index([supplierId])
+  @@index([clearanceJobId])
   @@index([depositDate])
 }
 
-enum DepositStatus {
-  ACTIVE
-  RELEASED
-  RETURNED
-  FORFEITED
+/// Container / shipping-line deposit refund lifecycle. The deposit is paid to
+/// the shipping line, then reclaimed once the empty container is returned and
+/// the EIR is collected.
+enum ContainerDepositStatus {
+  EIR_DOCS_COLLECTED
+  SUBMITTED_TO_SHIPPING_LINE
+  AWAITING_DEPOSIT_REFUND
+  DEPOSIT_REFUNDED
 }

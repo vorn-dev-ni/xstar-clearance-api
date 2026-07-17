@@ -69,7 +69,7 @@ describe('OperationsService', () => {
       'user_1',
     )) as { jobNumber: string; status: string };
     expect(created.jobNumber).toBe('IMP-2026-0005');
-    expect(created.status).toBe('NEW');
+    expect(created.status).toBe('DRAFT_BL_RECEIVED');
   });
 
   it('searches by job number or BL/booking number', async () => {

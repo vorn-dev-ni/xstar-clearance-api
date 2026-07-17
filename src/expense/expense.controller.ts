@@ -10,11 +10,10 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { ExportFormat } from '../reports/dto/report-query.dto';
 import { ApproveExpenseDto, RejectExpenseDto } from './dto/approval.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -26,6 +25,7 @@ import { ExpenseService } from './expense.service';
 
 @ApiTags('expenses')
 @ApiBearerAuth()
+@RequirePermission('accounting.view')
 @Controller('expenses')
 export class ExpenseController {
   constructor(
@@ -34,7 +34,7 @@ export class ExpenseController {
   ) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.STAFF)
+  @RequirePermission('accounting.edit')
   create(@Body() dto: CreateExpenseDto, @CurrentUser() user: AuthUser) {
     return this.expense.create(dto, user.userId);
   }
@@ -79,7 +79,7 @@ export class ExpenseController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.STAFF)
+  @RequirePermission('accounting.edit')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateExpenseDto,
@@ -90,7 +90,7 @@ export class ExpenseController {
 
   @Post(':id/approve')
   @HttpCode(200)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @RequirePermission('accounting.action')
   approve(
     @Param('id') id: string,
     @Body() dto: ApproveExpenseDto,
@@ -101,7 +101,7 @@ export class ExpenseController {
 
   @Post(':id/reject')
   @HttpCode(200)
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @RequirePermission('accounting.action')
   reject(
     @Param('id') id: string,
     @Body() dto: RejectExpenseDto,

@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { AuthUser } from './auth.types';
@@ -38,5 +38,12 @@ export class AuthController {
   @ApiOperation({ summary: 'Exchange a valid token for a fresh one' })
   refresh(@CurrentUser() user: AuthUser) {
     return this.auth.refresh(user);
+  }
+
+  @Get('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Current session user with effective permissions' })
+  me(@CurrentUser() user: AuthUser) {
+    return this.auth.me(user);
   }
 }

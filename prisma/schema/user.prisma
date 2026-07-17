@@ -8,7 +8,7 @@ model User {
   password  String
   firstName String
   lastName  String
-  role      UserRole  @default(STAFF)
+  role      UserRole  @default(OPERATION)
   department String?
   phone     String?
   isActive  Boolean   @default(true)
@@ -34,9 +34,20 @@ model User {
 }
 
 enum UserRole {
-  ADMIN
-  ACCOUNTANT
-  MANAGER
-  STAFF
-  VIEWER
+  SUPER_ADMIN
+  ACCOUNTING
+  OWNER
+  OPERATION
+}
+
+/// Grants a permission (\`${module}.${capability}\`) to a role. Rows present =
+/// granted. SUPER_ADMIN is a hardcoded bypass and is never stored here.
+model RolePermission {
+  id         String   @id @default(cuid())
+  role       UserRole
+  permission String
+  createdAt  DateTime @default(now())
+
+  @@unique([role, permission])
+  @@index([role])
 }

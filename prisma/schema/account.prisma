@@ -25,6 +25,8 @@ model Account {
   incomeRecords  IncomeRecord[]
   expenseRecords ExpenseRecord[]
   deposits       Deposit[]
+  bankPayments       Payment[]       @relation("PaymentBankAccount")
+  bankVendorPayments VendorPayment[] @relation("VendorPaymentBankAccount")
 
   @@index([type])
   @@index([category])

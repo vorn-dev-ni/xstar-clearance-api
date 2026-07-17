@@ -23,6 +23,11 @@ export class RecordPaymentDto {
   @IsEnum(PaymentMethod)
   method!: PaymentMethod;
 
+  @ApiPropertyOptional({ description: 'Bank account id the money landed in' })
+  @IsOptional()
+  @IsString()
+  bankAccountId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

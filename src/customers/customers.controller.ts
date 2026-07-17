@@ -8,8 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { ListCustomersDto } from './dto/list-customers.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -17,12 +16,13 @@ import { CustomersService } from './customers.service';
 
 @ApiTags('customers')
 @ApiBearerAuth()
+@RequirePermission('operation.view')
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly customers: CustomersService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.MANAGER)
+  @RequirePermission('operation.edit')
   create(@Body() dto: CreateCustomerDto) {
     return this.customers.create(dto);
   }
@@ -38,7 +38,7 @@ export class CustomersController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.MANAGER)
+  @RequirePermission('operation.edit')
   update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
     return this.customers.update(id, dto);
   }

@@ -36,7 +36,7 @@ model ClearanceJob {
   originCountry      String?
   originPort         String?
   destinationCountry String?
-  destinationPort    String?
+  destinationPort    String? // POD — port of discharge
   transportMode      TransportMode?
   shipperDetails     String?
   consigneeDetails   String?
@@ -44,6 +44,20 @@ model ClearanceJob {
   goodsValue         Decimal?       @db.Decimal(15, 2) // commercial invoice value
   goodsCurrency      String?
   incoterms          String? // FOB, CIF, EXW, DDP, ...
+
+  // Covering-file details (Import Shipment Details template)
+  importer          String?
+  hsCode            String? // customs HS code
+  vesselVoyage      String? // feeder vessel / voyage
+  containerType     ContainerType?
+  shipmentMode      ShipmentMode?
+  shipmentTaxStatus ShipmentTaxStatus?
+  packageCount      Int?
+  netWeight         String?
+  grossWeight       String?
+  deliveryTo        String?
+  unloadingBy       String?
+  returnEmptyTo     String? // return MT (empty container) to
 
   // Job costing
   estimatedRevenue Decimal? @db.Decimal(15, 2)
@@ -62,6 +76,7 @@ model ClearanceJob {
   incomes        IncomeRecord[]    @relation("JobIncomes")
   invoices       Invoice[]
   vendorPayments VendorPayment[]
+  deposits       Deposit[]
   recordItems    BillRecordItem[]
   expenseItems   BillExpenseItem[]
 
@@ -83,13 +98,39 @@ enum TransportMode {
   COURIER
 }
 
+/// Bill-of-lading / shipment workflow lifecycle (see the covering-file process).
+/// Independent from the container-deposit lifecycle (see ContainerDepositStatus).
 enum JobStatus {
-  NEW
-  DOCS_COLLECTED
-  DECLARATION_SUBMITTED
-  CLEARED
-  COMPLETED
-  CANCELLED
+  DRAFT_BL_RECEIVED
+  FINAL_BL_RECEIVED
+  BL_VERIFIED
+  BL_SUBMITTED_FOR_CUSTOMS
+  CUSTOMS_DECLARATION_SUBMITTED
+  CUSTOMS_CLEARANCE_COMPLETED
+  CONTAINER_RELEASED
+  DELIVERY_COMPLETED
+  FILE_CLOSED
+}
+
+enum ContainerType {
+  FCL
+  LCL
+  BREAK_BULK
+}
+
+enum ShipmentMode {
+  IMPORT
+  TEMPORARY_IMPORT
+  PRE_CLEARANCE_IMPORT
+  OTHER
+}
+
+/// Tax treatment of the shipment (from the covering-file "Shipment status" box).
+enum ShipmentTaxStatus {
+  DUTIABLE
+  TAX_EXEMPTION
+  PAY_VAT
+  TAX_DEPOSIT
 }
 
 /// Inline product/service rows on a bill (clearance job). Lightweight — not

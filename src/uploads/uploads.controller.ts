@@ -18,10 +18,9 @@ import {
   ApiConsumes,
   ApiTags,
 } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
 import { CreateUploadDto } from './dto/create-upload.dto';
 import { ListUploadsDto } from './dto/list-uploads.dto';
@@ -31,6 +30,7 @@ import { MAX_UPLOAD_BYTES, UploadsService, type UploadedFileLike } from './uploa
 
 @ApiTags('uploads')
 @ApiBearerAuth()
+@RequirePermission('documents.view')
 @Controller('uploads')
 export class UploadsController {
   constructor(private readonly uploads: UploadsService) {}
@@ -40,6 +40,7 @@ export class UploadsController {
    * S3 server-side. Avoids any browser→S3 CORS dependency.
    */
   @Post()
+  @RequirePermission('documents.edit')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
@@ -54,12 +55,14 @@ export class UploadsController {
   }
 
   @Post('presign')
+  @RequirePermission('documents.edit')
   presign(@Body() dto: PresignUploadDto, @CurrentUser() user: AuthUser) {
     return this.uploads.presign(dto, user.userId);
   }
 
   @Post(':id/confirm')
   @HttpCode(200)
+  @RequirePermission('documents.edit')
   confirm(
     @Param('id') id: string,
     @Body() dto: ConfirmUploadDto,
@@ -79,6 +82,7 @@ export class UploadsController {
   }
 
   @Patch(':id')
+  @RequirePermission('documents.edit')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateUploadDto,
@@ -88,7 +92,7 @@ export class UploadsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @RequirePermission('documents.action')
   remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.uploads.remove(id, user.userId);
   }

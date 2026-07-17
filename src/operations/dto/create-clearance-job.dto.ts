@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { JobStatus, TransportMode } from '@prisma/client';
+import {
+  ContainerType,
+  JobStatus,
+  ShipmentMode,
+  ShipmentTaxStatus,
+  TransportMode,
+} from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -218,6 +224,68 @@ export class CreateClearanceJobDto {
   @IsOptional()
   @IsString()
   incoterms?: string;
+
+  // Covering-file details (Import Shipment Details template)
+  @ApiPropertyOptional({ description: 'Importer name' })
+  @IsOptional()
+  @IsString()
+  importer?: string;
+
+  @ApiPropertyOptional({ description: 'Customs HS code' })
+  @IsOptional()
+  @IsString()
+  hsCode?: string;
+
+  @ApiPropertyOptional({ description: 'Feeder vessel / voyage' })
+  @IsOptional()
+  @IsString()
+  vesselVoyage?: string;
+
+  @ApiPropertyOptional({ enum: ContainerType })
+  @IsOptional()
+  @IsEnum(ContainerType)
+  containerType?: ContainerType;
+
+  @ApiPropertyOptional({ enum: ShipmentMode })
+  @IsOptional()
+  @IsEnum(ShipmentMode)
+  shipmentMode?: ShipmentMode;
+
+  @ApiPropertyOptional({ enum: ShipmentTaxStatus })
+  @IsOptional()
+  @IsEnum(ShipmentTaxStatus)
+  shipmentTaxStatus?: ShipmentTaxStatus;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  packageCount?: number;
+
+  @ApiPropertyOptional({ description: 'Net weight (free text incl. unit)' })
+  @IsOptional()
+  @IsString()
+  netWeight?: string;
+
+  @ApiPropertyOptional({ description: 'Gross weight (free text incl. unit)' })
+  @IsOptional()
+  @IsString()
+  grossWeight?: string;
+
+  @ApiPropertyOptional({ description: 'Delivery-to location' })
+  @IsOptional()
+  @IsString()
+  deliveryTo?: string;
+
+  @ApiPropertyOptional({ description: 'Unloading party' })
+  @IsOptional()
+  @IsString()
+  unloadingBy?: string;
+
+  @ApiPropertyOptional({ description: 'Return empty container (MT) to' })
+  @IsOptional()
+  @IsString()
+  returnEmptyTo?: string;
 
   // Job costing
   @ApiPropertyOptional()

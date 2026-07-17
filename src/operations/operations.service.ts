@@ -62,7 +62,7 @@ export class OperationsService {
             issueClearanceDate: dto.issueClearanceDate
               ? new Date(dto.issueClearanceDate)
               : undefined,
-            status: dto.status ?? JobStatus.NEW,
+            status: dto.status ?? JobStatus.DRAFT_BL_RECEIVED,
             createdBy: userId,
             ...itemWrites(recordItems, expenseItems),
           } as Prisma.ClearanceJobUncheckedCreateInput,
@@ -159,6 +159,18 @@ export class OperationsService {
             status: true,
           },
           orderBy: { recordDate: 'desc' },
+        },
+        deposits: {
+          select: {
+            id: true,
+            depositNumber: true,
+            depositDate: true,
+            amount: true,
+            currency: true,
+            status: true,
+            releasedDate: true,
+          },
+          orderBy: { depositDate: 'desc' },
         },
       },
     });

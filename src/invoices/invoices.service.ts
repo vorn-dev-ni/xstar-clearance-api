@@ -298,6 +298,7 @@ export class InvoicesService {
           amount: dto.amount,
           currency: invoice.currency,
           method: dto.method,
+          bankAccountId: dto.bankAccountId,
           bankName: dto.bankName,
           accountNumber: dto.accountNumber,
           referenceNumber: dto.referenceNumber,
@@ -316,7 +317,9 @@ export class InvoicesService {
         data: { paidAmount: newPaid, balanceDue: newBalance, status },
       });
 
-      const bankId = await this.journal.accountIdByCode(tx, ACCOUNT_CODES.BANK);
+      const bankId =
+        dto.bankAccountId ??
+        (await this.journal.accountIdByCode(tx, ACCOUNT_CODES.BANK));
       const arId = await this.journal.accountIdByCode(
         tx,
         ACCOUNT_CODES.ACCOUNTS_RECEIVABLE,

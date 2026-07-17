@@ -6,7 +6,9 @@ import { AccountType } from '@prisma/client';
  * chart of accounts and the services look accounts up by a stable code.
  */
 export const ACCOUNT_CODES = {
-  BANK: '1100', // Bank Account - USD
+  BANK: '1100', // default bank leg = ABA Business Account (VAT)
+  BANK_BUSINESS: '1100', // ABA Business Account (VAT 10%)
+  BANK_PERSONAL: '1110', // ABA Personal Account (no tax)
   ACCOUNTS_RECEIVABLE: '1200', // A/R
   PREPAID_EXPENSES: '1400',
   ACCOUNTS_PAYABLE: '2100', // A/P

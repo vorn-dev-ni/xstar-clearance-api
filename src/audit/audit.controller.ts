@@ -1,7 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { AuditService } from './audit.service';
 import { ListAuditLogsDto } from './dto/list-audit-logs.dto';
@@ -13,7 +12,7 @@ export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.MANAGER)
+  @RequirePermission('audit.view')
   async findAll(@Query() query: ListAuditLogsDto) {
     const { skip, take } = toSkipTake(query.page, query.limit);
     const { rows, total } = await this.audit.list({

@@ -8,10 +8,9 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateClearanceJobDto } from './dto/create-clearance-job.dto';
 import { ListClearanceJobsDto } from './dto/list-clearance-jobs.dto';
 import { UpdateClearanceJobDto } from './dto/update-clearance-job.dto';
@@ -19,12 +18,13 @@ import { OperationsService } from './operations.service';
 
 @ApiTags('operations')
 @ApiBearerAuth()
+@RequirePermission('operation.view')
 @Controller('clearance-jobs')
 export class OperationsController {
   constructor(private readonly operations: OperationsService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.MANAGER)
+  @RequirePermission('operation.edit')
   create(@Body() dto: CreateClearanceJobDto, @CurrentUser() user: AuthUser) {
     return this.operations.create(dto, user.userId);
   }
@@ -46,7 +46,7 @@ export class OperationsController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.MANAGER)
+  @RequirePermission('operation.edit')
   update(@Param('id') id: string, @Body() dto: UpdateClearanceJobDto) {
     return this.operations.update(id, dto);
   }

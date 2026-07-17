@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { PermissionsService } from '../permissions/permissions.service';
 import { S3Service } from '../storage/s3.service';
 import type { AuthUser, JwtPayload } from './auth.types';
 import { LoginDto } from './dto/login.dto';
@@ -20,9 +21,10 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly s3: S3Service,
+    private readonly permissions: PermissionsService,
   ) {}
 
-  /** Session user for API responses (avatarUrl key resolved to a presigned URL). */
+  /** Session user for API responses (avatar key resolved + effective permissions). */
   private async toSessionUser(user: User) {
     return {
       id: user.id,
@@ -31,7 +33,19 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       avatarUrl: user.avatarUrl ? await this.s3.presignGet(user.avatarUrl) : null,
+      permissions: await this.permissions.permissionsFor(user.role),
     };
+  }
+
+  /** Current session for the authenticated user (used by GET /auth/me). */
+  async me(current: AuthUser) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: current.userId },
+    });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('User no longer active');
+    }
+    return this.toSessionUser(user);
   }
 
   async register(dto: RegisterDto) {

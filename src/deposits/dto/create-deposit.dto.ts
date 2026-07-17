@@ -22,6 +22,13 @@ export class CreateDepositDto {
   @IsString()
   supplierId?: string;
 
+  @ApiPropertyOptional({
+    description: 'Shipment file (Bill) this deposit belongs to',
+  })
+  @IsOptional()
+  @IsString()
+  clearanceJobId?: string;
+
   @ApiProperty({ example: 1800.0 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()

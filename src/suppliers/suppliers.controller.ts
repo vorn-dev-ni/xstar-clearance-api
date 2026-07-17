@@ -8,8 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { ListSuppliersDto } from './dto/list-suppliers.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
@@ -17,12 +16,13 @@ import { SuppliersService } from './suppliers.service';
 
 @ApiTags('suppliers')
 @ApiBearerAuth()
+@RequirePermission('operation.view')
 @Controller('suppliers')
 export class SuppliersController {
   constructor(private readonly suppliers: SuppliersService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.MANAGER)
+  @RequirePermission('operation.edit')
   create(@Body() dto: CreateSupplierDto) {
     return this.suppliers.create(dto);
   }
@@ -38,7 +38,7 @@ export class SuppliersController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT, UserRole.MANAGER)
+  @RequirePermission('operation.edit')
   update(@Param('id') id: string, @Body() dto: UpdateSupplierDto) {
     return this.suppliers.update(id, dto);
   }

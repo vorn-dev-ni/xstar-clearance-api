@@ -1,10 +1,12 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { ListPaymentsDto } from './dto/list-payments.dto';
 import { PaymentsService } from './payments.service';
 
 @ApiTags('payments')
 @ApiBearerAuth()
+@RequirePermission('accounting.view')
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}

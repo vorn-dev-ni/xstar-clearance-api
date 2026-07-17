@@ -9,11 +9,10 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { ExportFormat } from '../reports/dto/report-query.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { ExportInvoicesDto } from './dto/export-invoices.dto';
@@ -24,6 +23,7 @@ import { InvoicesService } from './invoices.service';
 
 @ApiTags('invoices')
 @ApiBearerAuth()
+@RequirePermission('accounting.view')
 @Controller('invoices')
 export class InvoicesController {
   constructor(
@@ -32,7 +32,7 @@ export class InvoicesController {
   ) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @RequirePermission('accounting.edit')
   create(@Body() dto: CreateInvoiceDto, @CurrentUser() user: AuthUser) {
     return this.invoices.create(dto, user.userId);
   }
@@ -91,13 +91,13 @@ export class InvoicesController {
 
   @Post(':id/finalize')
   @HttpCode(200)
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @RequirePermission('accounting.action')
   finalize(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.invoices.finalize(id, user.userId);
   }
 
   @Post(':id/payments')
-  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @RequirePermission('accounting.action')
   recordPayment(
     @Param('id') id: string,
     @Body() dto: RecordPaymentDto,
