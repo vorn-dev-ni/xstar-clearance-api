@@ -13,11 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../permissions/require-permission.decorator';
@@ -26,7 +22,11 @@ import { CreateUploadDto } from './dto/create-upload.dto';
 import { ListUploadsDto } from './dto/list-uploads.dto';
 import { PresignUploadDto } from './dto/presign-upload.dto';
 import { UpdateUploadDto } from './dto/update-upload.dto';
-import { MAX_UPLOAD_BYTES, UploadsService, type UploadedFileLike } from './uploads.service';
+import {
+  MAX_UPLOAD_BYTES,
+  UploadsService,
+  type UploadedFileLike,
+} from './uploads.service';
 
 @ApiTags('uploads')
 @ApiBearerAuth()

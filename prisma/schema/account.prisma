@@ -21,12 +21,12 @@ model Account {
   updatedAt     DateTime        @updatedAt
 
   // Relations
-  journalLines   JournalEntryLine[]
-  incomeRecords  IncomeRecord[]
-  expenseRecords ExpenseRecord[]
-  deposits       Deposit[]
-  bankPayments       Payment[]       @relation("PaymentBankAccount")
-  bankVendorPayments VendorPayment[] @relation("VendorPaymentBankAccount")
+  journalLines       JournalEntryLine[]
+  incomeRecords      IncomeRecord[]
+  expenseRecords     ExpenseRecord[]
+  deposits           Deposit[]
+  bankPayments       Payment[]          @relation("PaymentBankAccount")
+  bankVendorPayments VendorPayment[]    @relation("VendorPaymentBankAccount")
 
   @@index([type])
   @@index([category])

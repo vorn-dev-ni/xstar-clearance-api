@@ -60,12 +60,12 @@ model ClearanceJob {
   returnEmptyTo     String? // return MT (empty container) to
 
   // Job costing
-  estimatedRevenue Decimal? @db.Decimal(15, 2)
-  estimatedCost    Decimal? @db.Decimal(15, 2)
-  assignedStaffId  String?
-  assignedStaffUser User?   @relation("JobAssignedStaff", fields: [assignedStaffId], references: [id], onDelete: SetNull)
-  assignedStaff    String?  // manual/denormalized display
-  brokerName       String?
+  estimatedRevenue  Decimal? @db.Decimal(15, 2)
+  estimatedCost     Decimal? @db.Decimal(15, 2)
+  assignedStaffId   String?
+  assignedStaffUser User?    @relation("JobAssignedStaff", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  assignedStaff     String? // manual/denormalized display
+  brokerName        String?
 
   // Billing (the job doubles as the client-facing bill)
   issueClearanceDate DateTime?
@@ -73,12 +73,13 @@ model ClearanceJob {
   depositAmount      Decimal?  @db.Decimal(15, 2) // client prepayment
 
   expenses       ExpenseRecord[]
-  incomes        IncomeRecord[]    @relation("JobIncomes")
+  incomes        IncomeRecord[]        @relation("JobIncomes")
   invoices       Invoice[]
   vendorPayments VendorPayment[]
   deposits       Deposit[]
   recordItems    BillRecordItem[]
   expenseItems   BillExpenseItem[]
+  bondedItems    BondedWarehouseItem[]
 
   createdBy String
   createdAt DateTime @default(now())

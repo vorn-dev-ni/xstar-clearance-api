@@ -64,4 +64,40 @@ describe('ExpenseService.create', () => {
     );
     expect(created[0].data.taxAmount).toBeUndefined();
   });
+
+  it('derives actualCost = amount + tax − deposit when not provided', async () => {
+    const { service, created } = build();
+    await service.create(
+      {
+        recordDate: '2026-05-30',
+        description: 'THC charge',
+        expenseType: 'OTHER',
+        amount: 500,
+        accountId: 'acc_1',
+        taxRate: 10,
+        deposit: 100,
+      },
+      'user_1',
+    );
+    // 500 + 50 (10%) − 100 = 450
+    expect(created[0].data.actualCost).toBe(450);
+  });
+
+  it('accepts an explicit tax amount (money) over taxRate', async () => {
+    const { service, created } = build();
+    await service.create(
+      {
+        recordDate: '2026-05-30',
+        description: 'Dry port fee',
+        expenseType: 'OTHER',
+        amount: 717.7,
+        accountId: 'acc_1',
+        taxAmount: 0,
+      },
+      'user_1',
+    );
+    expect(created[0].data.taxAmount).toBe(0);
+    // 717.7 + 0 − 0
+    expect(created[0].data.actualCost).toBe(717.7);
+  });
 });

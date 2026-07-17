@@ -50,6 +50,7 @@ export class IncomeService {
           referenceNumber: dto.referenceNumber,
           accountId: dto.accountId,
           receivedFrom: dto.receivedFrom,
+          receivedFromName: dto.receivedFromName,
           balance: dto.balance,
           containerCount: dto.containerCount,
           quantity: dto.quantity,

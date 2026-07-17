@@ -60,6 +60,13 @@ export class CreateExpenseDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   taxRate?: number;
 
+  @ApiPropertyOptional({
+    description: 'Explicit tax amount (money); overrides taxRate when set',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  taxAmount?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })

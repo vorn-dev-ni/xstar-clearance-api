@@ -67,6 +67,11 @@ export class CreateIncomeDto {
   @IsString()
   receivedFrom?: string;
 
+  @ApiPropertyOptional({ description: 'Free-text payer / account name' })
+  @IsOptional()
+  @IsString()
+  receivedFromName?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })

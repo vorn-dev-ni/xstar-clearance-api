@@ -348,40 +348,58 @@ export class CreateClearanceJobDto {
   @IsString()
   id?: string;
 
-  @ApiPropertyOptional({ description: 'Read-only customer object if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only customer object if passed by client',
+  })
   @IsOptional()
   customer?: unknown;
 
-  @ApiPropertyOptional({ description: 'Read-only staff user object if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only staff user object if passed by client',
+  })
   @IsOptional()
   assignedStaffUser?: unknown;
 
-  @ApiPropertyOptional({ description: 'Read-only income record object if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only income record object if passed by client',
+  })
   @IsOptional()
   incomeRecord?: unknown;
 
-  @ApiPropertyOptional({ description: 'Read-only expenses array if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only expenses array if passed by client',
+  })
   @IsOptional()
   expenses?: unknown;
 
-  @ApiPropertyOptional({ description: 'Read-only incomes array if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only incomes array if passed by client',
+  })
   @IsOptional()
   incomes?: unknown;
 
-  @ApiPropertyOptional({ description: 'Read-only financials object if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only financials object if passed by client',
+  })
   @IsOptional()
   financials?: unknown;
 
-  @ApiPropertyOptional({ description: 'Read-only createdBy if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only createdBy if passed by client',
+  })
   @IsOptional()
   @IsString()
   createdBy?: string;
 
-  @ApiPropertyOptional({ description: 'Read-only createdAt if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only createdAt if passed by client',
+  })
   @IsOptional()
   createdAt?: unknown;
 
-  @ApiPropertyOptional({ description: 'Read-only updatedAt if passed by client' })
+  @ApiPropertyOptional({
+    description: 'Read-only updatedAt if passed by client',
+  })
   @IsOptional()
   updatedAt?: unknown;
 }

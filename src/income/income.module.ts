@@ -9,5 +9,6 @@ import { IncomeService } from './income.service';
   imports: [JournalModule, ReportsModule],
   controllers: [IncomeController],
   providers: [IncomeService, IncomeExportService],
+  exports: [IncomeService],
 })
 export class IncomeModule {}

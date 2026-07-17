@@ -6,7 +6,9 @@ import { AppService } from './app.service';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { BondedWarehouseModule } from './bonded-warehouse/bonded-warehouse.module';
 import { CommonModule } from './common/common.module';
+import { CostingModule } from './costing/costing.module';
 import { validate, type Env } from './config/env.validation';
 import { CustomersModule } from './customers/customers.module';
 import { DepositsModule } from './deposits/deposits.module';
@@ -67,6 +69,8 @@ import { VendorPaymentsModule } from './vendor-payments/vendor-payments.module';
     UsersModule,
     OperationsModule,
     VendorPaymentsModule,
+    CostingModule,
+    BondedWarehouseModule,
   ],
   controllers: [AppController],
   providers: [AppService],

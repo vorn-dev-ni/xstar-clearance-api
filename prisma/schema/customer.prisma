@@ -3,17 +3,17 @@
 // ============================================
 
 model Customer {
-  id            String   @id @default(cuid())
-  code          String   @unique // e.g., 027-01-26
+  id            String  @id @default(cuid())
+  code          String  @unique // e.g., 027-01-26
   nameEn        String
   nameKh        String?
   nameCn        String?
-  taxId         String?  @unique // VAT/Tax ID
+  taxId         String? @unique // VAT/Tax ID
   address       String
   commune       String?
   district      String?
   province      String?
-  country       String   @default("Cambodia")
+  country       String  @default("Cambodia")
   phone         String?
   email         String?
   website       String?
@@ -21,16 +21,16 @@ model Customer {
   paymentTerms  String?
   bankAccount   String?
   bankName      String?
-  isActive      Boolean  @default(true)
+  isActive      Boolean @default(true)
   notes         String?
 
-  location             String? // free-text location (optional)
-  registrationDate     DateTime? // when the client was registered in the system (contract may predate)
-  remark               String? // editable anytime; required whenever isActive flips
+  location               String? // free-text location (optional)
+  registrationDate       DateTime? // when the client was registered in the system (contract may predate)
+  remark                 String? // editable anytime; required whenever isActive flips
   representativeImageUrl String? // direct link to profile/representative image
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   incomeRecords   IncomeRecord[]

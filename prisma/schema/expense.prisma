@@ -3,11 +3,11 @@
 // ============================================
 
 model ExpenseRecord {
-  id          String      @id @default(cuid())
-  recordNumber String     @unique
-  recordDate  DateTime
-  description String // Expense description
-  expenseType ExpenseType
+  id           String      @id @default(cuid())
+  recordNumber String      @unique
+  recordDate   DateTime
+  description  String // Expense description
+  expenseType  ExpenseType
 
   // Supplier info
   supplierId   String?

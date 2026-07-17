@@ -32,7 +32,9 @@ export class AuthService {
       role: user.role,
       firstName: user.firstName,
       lastName: user.lastName,
-      avatarUrl: user.avatarUrl ? await this.s3.presignGet(user.avatarUrl) : null,
+      avatarUrl: user.avatarUrl
+        ? await this.s3.presignGet(user.avatarUrl)
+        : null,
       permissions: await this.permissions.permissionsFor(user.role),
     };
   }

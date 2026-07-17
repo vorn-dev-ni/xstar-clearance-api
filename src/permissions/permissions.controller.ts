@@ -30,10 +30,7 @@ export class PermissionsController {
   }
 
   @Put('roles/:role')
-  setRole(
-    @Param('role') role: UserRole,
-    @Body() dto: SetRolePermissionsDto,
-  ) {
+  setRole(@Param('role') role: UserRole, @Body() dto: SetRolePermissionsDto) {
     return this.permissions
       .setRolePermissions(role, dto.permissions)
       .then(() => this.permissions.matrix());

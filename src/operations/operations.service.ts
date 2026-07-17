@@ -142,6 +142,9 @@ export class OperationsService {
             recordDate: true,
             description: true,
             amount: true,
+            taxAmount: true,
+            deposit: true,
+            actualCost: true,
             currency: true,
             status: true,
             approvalStatus: true,
@@ -177,7 +180,9 @@ export class OperationsService {
     if (!job) throw new NotFoundException('Clearance job not found');
 
     const actualRevenue = sumAmounts(job.incomes);
-    const actualCost = sumAmounts(job.expenses);
+    // Costing uses the client's actual-cost basis (Amount + Tax − Deposit),
+    // not the raw invoiced amount.
+    const actualCost = sumActualCost(job.expenses);
     const estimatedRevenue =
       job.estimatedRevenue != null ? Number(job.estimatedRevenue) : null;
     const estimatedCost =
@@ -259,7 +264,7 @@ export class OperationsService {
                 },
               }
             : {}),
-        } as Prisma.ClearanceJobUncheckedUpdateInput,
+        },
       });
     } catch (e) {
       throw this.mapUniqueError(e);
@@ -281,6 +286,31 @@ export class OperationsService {
 
 function sumAmounts(rows: { amount: Prisma.Decimal }[]): number {
   return rows.reduce((sum, r) => sum + Number(r.amount), 0);
+}
+
+/**
+ * Total actual cost = Σ (Amount + Tax − Deposit). Uses the stored `actualCost`
+ * when present, falling back to the formula for legacy rows without it.
+ */
+function sumActualCost(
+  rows: {
+    amount: Prisma.Decimal;
+    taxAmount: Prisma.Decimal | null;
+    deposit: Prisma.Decimal | null;
+    actualCost: Prisma.Decimal | null;
+  }[],
+): number {
+  return round2(
+    rows.reduce((sum, r) => {
+      const actual =
+        r.actualCost != null
+          ? Number(r.actualCost)
+          : Number(r.amount) +
+            Number(r.taxAmount ?? 0) -
+            Number(r.deposit ?? 0);
+      return sum + actual;
+    }, 0),
+  );
 }
 
 function round2(n: number): number {

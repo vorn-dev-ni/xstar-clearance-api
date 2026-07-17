@@ -1,0 +1,116 @@
+// ============================================
+// BONDED WAREHOUSE — DUTY-SUSPENDED STOCK
+// ============================================
+
+/// A single unit of goods held in a customs bonded warehouse (duty suspended,
+/// not yet released / not yet taxed). Modelled per the client's "Stock Detail"
+/// sheet — one row per physical unit (e.g. one vehicle by VIN). Linked to a
+/// bill-of-lading job via `clearanceJobId`; `blNumber` is also stored directly
+/// so items can be grouped/reported by B/L even without a linked job.
+model BondedWarehouseItem {
+  id String @id @default(cuid())
+
+  // Optional link: item belongs to a clearance/BL job
+  clearanceJobId String?
+  clearanceJob   ClearanceJob? @relation(fields: [clearanceJobId], references: [id], onDelete: SetNull)
+
+  // Parties & references (Stock Detail columns)
+  importerName         String?
+  shipperName          String?
+  blNumber             String // Truck Bill / Bill of Lading / Airway Bill Number
+  invoicePackingNumber String? // Invoice/Packing List Number
+  portOfLoading        String?
+  portOfDischarge      String? // Port of Discharge / Transit Place
+
+  // Container / conveyance
+  containerTruckNumber String?
+  containerTruckType   String? // 40HC, 40H, ...
+
+  // Goods description (vehicle-oriented but generic)
+  brandName      String?
+  description    String?
+  engineCapacity String? // "200KW", "1500CC", ...
+  modelYear      Int?
+  color          String?
+  countryOrigin  String?
+  vin            String? // VIN#
+  engineNumber   String? // ENGINE#
+  commodityCode  String? // HS / commodity code
+
+  // Quantities & weight
+  quantity      Int      @default(1) // QTY (UNIT)
+  grossWeightKg Decimal? @db.Decimal(15, 3)
+
+  // Warehouse status & stock movement
+  receivedDateKwb DateTime? // Received Date In KWB
+  currentLocation BondedItemLocation @default(KWB)
+  releasedQty     Int                @default(0)
+  stockBalance    Int                @default(1) // quantity - releasedQty (maintained by service)
+  dutyStatus      BondedDutyStatus   @default(UNPAID)
+  validDays       Int? // duty suspension validity (e.g. 180)
+
+  // Customs declaration references
+  etaDate     DateTime?
+  sadIdIm8    String? // transit declaration (IM8)
+  transitDate DateTime?
+  sadIdIm7    String? // inbound / warehousing declaration (IM7)
+  inboundDate DateTime?
+
+  notes String?
+
+  movements BondedWarehouseMovement[]
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clearanceJobId])
+  @@index([blNumber])
+  @@index([vin])
+  @@index([currentLocation])
+  @@index([dutyStatus])
+  @@index([receivedDateKwb])
+}
+
+/// Physical stock movement / status change on a bonded item — powers the
+/// "TRANSFER / LOCATION UPDATE / OUTBOUND" audit trail. A RELEASE movement is
+/// an outbound: it increments the item's `releasedQty` and (when duty-paid)
+/// flips `dutyStatus` to PAID.
+model BondedWarehouseMovement {
+  id     String              @id @default(cuid())
+  itemId String
+  item   BondedWarehouseItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  type         BondedMovementType
+  date         DateTime            @default(now())
+  quantity     Int                 @default(1)
+  fromLocation BondedItemLocation?
+  toLocation   BondedItemLocation?
+  dutyPaid     Boolean             @default(false) // for RELEASE: released under duty payment
+  sadId        String? // customs declaration for the release (e.g. IM4)
+  note         String?
+
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+  @@index([date])
+}
+
+enum BondedItemLocation {
+  KWB // in the bonded warehouse
+  SHOWROOM // transferred to showroom (still duty-suspended)
+  RELEASED // released / outbound
+  OTHER
+}
+
+enum BondedDutyStatus {
+  UNPAID // duty suspended
+  PAID // duty settled / cleared
+}
+
+enum BondedMovementType {
+  TRANSFER // move between locations (e.g. KWB -> SHOWROOM)
+  LOCATION_UPDATE // correction/update of current location
+  RELEASE // outbound release out of the bonded regime
+}

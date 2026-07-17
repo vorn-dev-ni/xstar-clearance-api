@@ -103,7 +103,11 @@ export class DepositsService {
    * DEPOSIT_REFUNDED, post the reversing entry (DR bank / CR the deposit
    * account) so the deposit clears off the books, and stamp the refund date.
    */
-  async updateStatus(id: string, status: ContainerDepositStatus, userId: string) {
+  async updateStatus(
+    id: string,
+    status: ContainerDepositStatus,
+    userId: string,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const deposit = await tx.deposit.findUnique({ where: { id } });
       if (!deposit) throw new NotFoundException('Deposit not found');

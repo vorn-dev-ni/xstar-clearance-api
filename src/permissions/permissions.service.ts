@@ -49,13 +49,18 @@ export class PermissionsService {
   }
 
   /** Replace all grants for a role. SUPER_ADMIN is not editable. */
-  async setRolePermissions(role: UserRole, permissions: string[]): Promise<void> {
+  async setRolePermissions(
+    role: UserRole,
+    permissions: string[],
+  ): Promise<void> {
     if (role === UserRole.SUPER_ADMIN) {
       throw new BadRequestException('SUPER_ADMIN permissions cannot be edited');
     }
     const invalid = permissions.filter((p) => !ALL_PERMISSIONS.includes(p));
     if (invalid.length) {
-      throw new BadRequestException(`Unknown permissions: ${invalid.join(', ')}`);
+      throw new BadRequestException(
+        `Unknown permissions: ${invalid.join(', ')}`,
+      );
     }
     const unique = [...new Set(permissions)];
     await this.prisma.$transaction([

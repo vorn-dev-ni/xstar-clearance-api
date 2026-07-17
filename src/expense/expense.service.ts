@@ -30,6 +30,19 @@ export class ExpenseService {
   ) {}
 
   async create(dto: CreateExpenseDto, userId: string) {
+    // Prefer an explicit tax amount (B/L costing enters tax as money), else
+    // derive it from the tax rate.
+    const taxAmount =
+      dto.taxAmount != null
+        ? round2(dto.taxAmount)
+        : dto.taxRate != null
+          ? round2((dto.amount * dto.taxRate) / 100)
+          : 0;
+    const hasTax = dto.taxAmount != null || dto.taxRate != null;
+    // Actual cost mirrors the client's B/L costing formula:
+    // Amount + Tax − Deposit (explicit override still honored).
+    const actualCost =
+      dto.actualCost ?? round2(dto.amount + taxAmount - (dto.deposit ?? 0));
     const record = await this.prisma.$transaction(async (tx) => {
       const recordNumber = await nextNumber(
         tx,
@@ -49,12 +62,9 @@ export class ExpenseService {
           currency: dto.currency,
           accountId: dto.accountId,
           taxRate: dto.taxRate,
-          taxAmount:
-            dto.taxRate != null
-              ? Math.round(dto.amount * dto.taxRate) / 100
-              : undefined,
+          taxAmount: hasTax ? taxAmount : undefined,
           deposit: dto.deposit,
-          actualCost: dto.actualCost,
+          actualCost,
           invoiceNumber: dto.invoiceNumber,
           poNumber: dto.poNumber,
           referenceNumber: dto.referenceNumber,
@@ -165,11 +175,31 @@ export class ExpenseService {
         'Posted expense records cannot be edited',
       );
     }
+    // Recompute tax + actual cost from the merged (existing + patch) values so
+    // the B/L costing total stays consistent: actualCost = amount + tax − deposit.
+    const amount = dto.amount ?? Number(existing.amount);
+    const taxRate =
+      dto.taxRate ??
+      (existing.taxRate != null ? Number(existing.taxRate) : null);
+    const deposit =
+      dto.deposit ?? (existing.deposit != null ? Number(existing.deposit) : 0);
+    const taxAmount =
+      dto.taxAmount != null
+        ? round2(dto.taxAmount)
+        : taxRate != null
+          ? round2((amount * taxRate) / 100)
+          : existing.taxAmount != null
+            ? Number(existing.taxAmount)
+            : 0;
+    const actualCost =
+      dto.actualCost ?? round2(amount + taxAmount - (deposit ?? 0));
     const updated = await this.prisma.expenseRecord.update({
       where: { id },
       data: {
         ...dto,
         recordDate: dto.recordDate ? new Date(dto.recordDate) : undefined,
+        taxAmount,
+        actualCost,
         // Editing an expense sends it back for approval.
         approvalStatus: ApprovalStatus.PENDING,
         status: TransactionStatus.PENDING,
@@ -283,6 +313,8 @@ export class ExpenseService {
     };
   }
 }
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 async function nextNumber(
   tx: Prisma.TransactionClient,

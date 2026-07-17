@@ -27,8 +27,8 @@ model Invoice {
 
   // Details
   description String?
-  notes      String?
-  status     InvoiceStatus @default(DRAFT)
+  notes       String?
+  status      InvoiceStatus @default(DRAFT)
 
   // Tax invoice vs debit note (not under company title)
   invoiceType       InvoiceType @default(TAX_INVOICE)

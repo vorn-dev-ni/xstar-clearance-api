@@ -3,11 +3,11 @@
 // ============================================
 
 model IncomeRecord {
-  id          String      @id @default(cuid())
-  recordNumber String     @unique // Auto-generated
-  recordDate  DateTime
-  description String // Service description
-  serviceType ServiceType
+  id           String      @id @default(cuid())
+  recordNumber String      @unique // Auto-generated
+  recordDate   DateTime
+  description  String // Service description
+  serviceType  ServiceType
 
   // Customer info
   customerId String
@@ -24,7 +24,8 @@ model IncomeRecord {
 
   // Company income statement fields
   receivedFrom     String? // userId of the staff who received it
-  receivedFromUser User?   @relation("IncomeReceivedBy", fields: [receivedFrom], references: [id])
+  receivedFromUser User?    @relation("IncomeReceivedBy", fields: [receivedFrom], references: [id])
+  receivedFromName String? // free-text payer / account name (B/L costing income line)
   balance          Decimal? @db.Decimal(15, 2)
 
   // Accounting

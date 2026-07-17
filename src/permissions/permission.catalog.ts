@@ -16,9 +16,21 @@ export interface ModuleDef {
 }
 
 export const MODULES: ModuleDef[] = [
-  { key: 'operation', label: 'Operation', capabilities: ['view', 'edit', 'action'] },
-  { key: 'accounting', label: 'Accounting', capabilities: ['view', 'edit', 'action'] },
-  { key: 'documents', label: 'Documents', capabilities: ['view', 'edit', 'action'] },
+  {
+    key: 'operation',
+    label: 'Operation',
+    capabilities: ['view', 'edit', 'action'],
+  },
+  {
+    key: 'accounting',
+    label: 'Accounting',
+    capabilities: ['view', 'edit', 'action'],
+  },
+  {
+    key: 'documents',
+    label: 'Documents',
+    capabilities: ['view', 'edit', 'action'],
+  },
   { key: 'reports', label: 'Reports', capabilities: ['view'] },
   { key: 'settings', label: 'Settings', capabilities: ['view', 'edit'] },
   { key: 'users', label: 'Users', capabilities: ['view', 'edit'] },

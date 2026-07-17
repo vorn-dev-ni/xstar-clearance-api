@@ -17,8 +17,8 @@ model VendorPayment {
   supplierName String? // if the vendor is not a Supplier record
 
   // Optional links
-  clearanceJobId String?
-  clearanceJob   ClearanceJob? @relation(fields: [clearanceJobId], references: [id])
+  clearanceJobId  String?
+  clearanceJob    ClearanceJob?  @relation(fields: [clearanceJobId], references: [id])
   expenseRecordId String?
   expenseRecord   ExpenseRecord? @relation(fields: [expenseRecordId], references: [id])
 

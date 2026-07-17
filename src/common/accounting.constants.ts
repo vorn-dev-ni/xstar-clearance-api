@@ -15,6 +15,7 @@ export const ACCOUNT_CODES = {
   DEPOSITS_HELD: '2200', // Customer/Supplier deposits
   VAT_PAYABLE: '2300', // Output VAT collected on invoices
   OPERATION_REVENUE: '4001',
+  COSTING_EXPENSE: '5001', // default expense leg for B/L costing cost lines
 } as const;
 
 /**
