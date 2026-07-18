@@ -4,6 +4,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CompanySettings, Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
+import { DEFAULT_COMPANY_NAME } from '../common/company.constants';
 import { PrismaService } from '../prisma/prisma.service';
 
 type InvoiceWithRelations = Prisma.InvoiceGetPayload<{
@@ -40,6 +41,9 @@ const KH = {
   grandTotalRiel: 'សរុបរួមជារៀល',
   deposit: 'ប្រាក់កក់',
   amountToBePaid: 'ប្រាក់ត្រូវបង់',
+  buyerSignature: 'ហត្ថលេខា និងឈ្មោះអ្នកទិញ',
+  sellerSignature: 'ហត្ថលេខា និងឈ្មោះអ្នកលក់',
+  footerNote: 'សម្គាល់៖ ច្បាប់ដើមសម្រាប់អ្នកទិញ ច្បាប់ចម្លងសម្រាប់អ្នកលក់',
 };
 
 export type InvoiceListRow = Prisma.InvoiceGetPayload<{
@@ -96,17 +100,29 @@ export class InvoiceExportService {
     this.renderHeader(doc, invoice, company);
     this.renderCustomerBlock(doc, invoice);
     this.renderLineItems(doc, invoice);
-    this.renderTotals(doc, invoice, company);
-    this.renderBankFooter(doc, company);
+
+    // Totals (right) and bank block (left) share the same top, below the items.
+    const contentTop = doc.y;
+    const totalsBottom = this.renderTotals(doc, invoice, company, contentTop);
+    const bankBottom = this.renderBankFooter(doc, company, contentTop);
+    let y = Math.max(totalsBottom, bankBottom) + 8;
 
     if (invoice.notes) {
-      doc.moveDown(1);
-      doc.fontSize(9).fillColor('#666').text(`Notes: ${invoice.notes}`, 50);
+      doc.font('Helvetica').fontSize(9).fillColor('#666');
+      doc.text(`Notes: ${invoice.notes}`, 50, y, { width: 495 });
+      y = doc.y + 6;
     }
+
+    // Signature blocks, then the "original/copied" note pinned near the margin.
+    y = this.renderSignatures(doc, y + 20);
+    this.renderFooterNote(doc);
     doc
+      .font('Helvetica')
       .fontSize(8)
       .fillColor('#999')
-      .text(`Generated ${new Date().toISOString().slice(0, 10)}`, 50, 790);
+      .text(`Generated ${new Date().toISOString().slice(0, 10)}`, 50, 802, {
+        lineBreak: false,
+      });
 
     doc.end();
     return { buffer: await done, invoiceNumber: invoice.invoiceNumber };
@@ -175,13 +191,13 @@ export class InvoiceExportService {
       .fontSize(12)
       .fillColor('#112E81')
       .text(
-        (
-          company?.companyNameEn ??
-          'S.T STAR LOGISTICS & CUSTOMS CLEARANCE SERVICE CO., LTD'
-        ).toUpperCase(),
+        (company?.companyNameEn ?? DEFAULT_COMPANY_NAME).toUpperCase(),
         50,
         y,
-        { width: 495, align: 'center' },
+        {
+          width: 495,
+          align: 'center',
+        },
       );
     doc.font('Helvetica').fontSize(8).fillColor('#444');
     const addressLine = [company?.address, company?.province, company?.country]
@@ -374,16 +390,35 @@ export class InvoiceExportService {
         doc.fontSize(9);
       }
       y += Math.max(descHeight, 12) + 6;
+      // Light separator between rows.
+      doc
+        .moveTo(50, y - 3)
+        .lineTo(545, y - 3)
+        .strokeColor('#e2e2e2')
+        .stroke();
     });
-    doc.moveTo(50, y).lineTo(545, y).strokeColor('#999').stroke();
-    doc.y = y + 8;
+    const bodyBottom = y;
+    // Column separators (below the header band) + outer box for a gridded look.
+    const bodyTop = top + bandH;
+    doc.strokeColor('#ccc').lineWidth(0.5);
+    for (const col of cols) {
+      if (col.x === 50) continue; // left edge handled by the outer box
+      doc.moveTo(col.x, bodyTop).lineTo(col.x, bodyBottom).stroke();
+    }
+    doc
+      .rect(50, top, 495, bodyBottom - top)
+      .strokeColor('#999')
+      .lineWidth(1)
+      .stroke();
+    doc.y = bodyBottom + 8;
   }
 
   private renderTotals(
     doc: PDFKit.PDFDocument,
     invoice: InvoiceWithRelations,
     company: CompanySettings | null,
-  ): void {
+    top: number,
+  ): number {
     const rate = Number(company?.khrExchangeRate ?? 4100);
     const totalUsd = Number(invoice.totalAmount);
     const riel = Math.round(totalUsd * rate);
@@ -422,7 +457,7 @@ export class InvoiceExportService {
       },
     ];
 
-    let y = doc.y;
+    let y = top;
     for (const row of rows) {
       if (row.bold) {
         doc
@@ -443,13 +478,14 @@ export class InvoiceExportService {
       y += row.bold ? 18 : 15;
     }
     doc.font('Helvetica');
-    doc.y = y;
+    return y;
   }
 
   private renderBankFooter(
     doc: PDFKit.PDFDocument,
     company: CompanySettings | null,
-  ): void {
+    top: number,
+  ): number {
     const lines = [
       company?.bankAccountName && `Account Name: ${company.bankAccountName}`,
       company?.bankAccountNumber && `Account N°: ${company.bankAccountNumber}`,
@@ -457,14 +493,89 @@ export class InvoiceExportService {
       company?.swiftCode && `SWIFT CODE: ${company.swiftCode}`,
       company?.chequePayableNote,
     ].filter((l): l is string => Boolean(l));
-    if (lines.length === 0) return;
+    if (lines.length === 0) return top;
 
-    // Bank block sits left of the totals; anchor it below the line items.
-    const y = doc.y - 15 * lines.length - 3;
-    doc.fontSize(8).fillColor('#000');
-    lines.forEach((line, i) => {
-      doc.text(line, 50, Math.max(y, 50) + i * 13, { width: 250 });
-    });
+    // Bank block sits on the left, level with the totals stack on the right.
+    let y = top;
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(8)
+      .fillColor('#000')
+      .text('* Bank Information for remittance of payment:', 50, y, {
+        width: 260,
+      });
+    y = doc.y + 2;
+    doc.font('Helvetica').fontSize(8);
+    for (const line of lines) {
+      doc.text(line, 50, y, { width: 260 });
+      y = doc.y + 1;
+    }
+    return y;
+  }
+
+  /** Two signature areas (buyer left, seller right) near the page bottom. */
+  private renderSignatures(doc: PDFKit.PDFDocument, top: number): number {
+    // Keep the block off the bottom margin; start a new page if too low.
+    let y = top;
+    if (y > 690) {
+      doc.addPage();
+      y = 70;
+    }
+    const cols: Array<[number, number, string, string]> = [
+      [55, 250, KH.buyerSignature, 'Customer Signature & Name'],
+      [320, 515, KH.sellerSignature, 'Seller Signature & Name'],
+    ];
+    const lineY = y + 24;
+    for (const [x1, x2, kh, en] of cols) {
+      doc.moveTo(x1, lineY).lineTo(x2, lineY).strokeColor('#999').stroke();
+      const w = x2 - x1;
+      let capY = lineY + 4;
+      if (this.khmerAvailable) {
+        try {
+          doc
+            .font('khmer')
+            .fontSize(8)
+            .fillColor('#000')
+            .text(kh, x1, capY, { width: w, align: 'center' });
+          capY = doc.y + 1;
+        } catch {
+          // Shaper failed — fall through to the English caption only.
+        }
+      }
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor('#000')
+        .text(en, x1, capY, { width: w, align: 'center' });
+    }
+    return lineY + 30;
+  }
+
+  /** Centered "original for customer / copy for seller" note at the margin. */
+  private renderFooterNote(doc: PDFKit.PDFDocument): void {
+    let y = 772;
+    if (this.khmerAvailable) {
+      try {
+        doc
+          .font('khmer')
+          .fontSize(8)
+          .fillColor('#333')
+          .text(KH.footerNote, 50, y, { width: 495, align: 'center' });
+        y = doc.y;
+      } catch {
+        // Shaper failed — English line below is enough.
+      }
+    }
+    doc
+      .font('Helvetica')
+      .fontSize(8)
+      .fillColor('#333')
+      .text(
+        'Note: Original Invoice for Customer, Copied Invoice for Seller',
+        50,
+        y,
+        { width: 495, align: 'center' },
+      );
   }
 
   /** Export a filtered invoice list as an Excel workbook. */
@@ -524,6 +635,9 @@ export class InvoiceExportService {
     rows: InvoiceListRow[],
     summary: InvoiceListSummary,
   ): Promise<Buffer> {
+    const company = await this.prisma.companySettings.findFirst({
+      select: { companyNameEn: true },
+    });
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
@@ -531,7 +645,7 @@ export class InvoiceExportService {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
     });
 
-    doc.fontSize(16).text('S.T STAR Logistics & Customs Clearance');
+    doc.fontSize(16).text(company?.companyNameEn ?? DEFAULT_COMPANY_NAME);
     doc.moveDown(0.3);
     doc.fontSize(13).text('Invoice List');
     doc

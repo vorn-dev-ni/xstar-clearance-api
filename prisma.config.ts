@@ -19,8 +19,10 @@ export default defineConfig({
     seed: 'ts-node prisma/seed.ts',
   },
   datasource: {
-    // Used only by the Prisma CLI (migrate/introspect). The application runtime
-    // connects through the driver adapter in PrismaService.
-    url: process.env.DATABASE_URL as string,
+    // Used only by the Prisma CLI (migrate/introspect). Prefer DIRECT_URL (the
+    // non-pooled Neon endpoint) — DDL/advisory locks are unreliable through the
+    // PgBouncer pooler — and fall back to DATABASE_URL when it isn't set. The
+    // application runtime connects through the driver adapter in PrismaService.
+    url: (process.env.DIRECT_URL ?? process.env.DATABASE_URL) as string,
   },
 });

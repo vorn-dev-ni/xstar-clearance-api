@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
+import { DEFAULT_COMPANY_NAME } from '../common/company.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildReportDocument } from './report-builders';
 import {
@@ -27,9 +28,7 @@ export class ReportExportService {
       select: { companyNameEn: true, currency: true },
     });
     return {
-      companyName:
-        company?.companyNameEn ??
-        'S.T STAR Logistics & Customs Clearance Service Co., Ltd',
+      companyName: company?.companyNameEn ?? DEFAULT_COMPANY_NAME,
       currency: company?.currency ?? 'USD',
       ...buildReportDocument(slug, data),
     };
@@ -48,9 +47,7 @@ export class ReportExportService {
     });
     return {
       title: spec.title,
-      companyName:
-        company?.companyNameEn ??
-        'S.T STAR Logistics & Customs Clearance Service Co., Ltd',
+      companyName: company?.companyNameEn ?? DEFAULT_COMPANY_NAME,
       currency: company?.currency ?? 'USD',
       periodLabel: spec.periodLabel,
       sections: [

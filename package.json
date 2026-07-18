@@ -20,7 +20,16 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:seed": "ts-node prisma/seed.ts",
-    "rbac:seed": "ts-node prisma/seed-rbac.ts"
+    "rbac:seed": "ts-node prisma/seed-rbac.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio",
+    "migrate": "prisma migrate dev --name",
+    "migrate:create": "prisma migrate dev --create-only --name",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
+    "migrate:reset": "prisma migrate reset",
+    "reset": "prisma migrate reset",
+    "db:push": "prisma db push"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1085.0",

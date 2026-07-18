@@ -10,6 +10,20 @@ export const envSchema = z.object({
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  // Non-pooled Neon endpoint (host without `-pooler`) used by the Prisma CLI for
+  // migrations — DDL/advisory locks are unreliable through PgBouncer. Falls back
+  // to DATABASE_URL when unset. Runtime pooling is unaffected.
+  DIRECT_URL: z.string().optional(),
+
+  // pg connection-pool tuning for the runtime driver adapter (PrismaPg). Safe
+  // defaults; override per environment. See src/prisma/prisma.service.ts.
+  DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DB_POOL_MIN: z.coerce.number().int().nonnegative().default(0),
+  DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(30000),
+  DB_CONNECT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(10000),
+  DB_POOL_MAX_USES: z.coerce.number().int().nonnegative().default(7500),
+  // 0 = disabled (opt-in; the Neon pooler can reject unknown startup params).
+  DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
   // Comma-separated list of allowed origins, or `*` for any.
   CORS_ORIGIN: z.string().default('*'),
   // Secret used to sign/verify JWT access tokens.
