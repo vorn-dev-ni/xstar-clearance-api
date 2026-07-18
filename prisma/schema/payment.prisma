@@ -85,6 +85,7 @@ model Deposit {
   @@index([supplierId])
   @@index([clearanceJobId])
   @@index([depositDate])
+  @@index([status])
 }
 
 /// Container / shipping-line deposit refund lifecycle. The deposit is paid to
