@@ -21,6 +21,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:seed": "ts-node prisma/seed.ts",
     "rbac:seed": "ts-node prisma/seed-rbac.ts",
+    "users:seed": "ts-node prisma/seed-test-users.ts",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio",
     "migrate": "prisma migrate dev --name",
