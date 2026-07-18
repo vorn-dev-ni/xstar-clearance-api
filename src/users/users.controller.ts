@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -41,5 +42,13 @@ export class UsersController {
   @RequirePermission('users.edit')
   update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.users.update(id, dto);
+  }
+
+  // `users.delete` is not a catalog capability, so no stored role can hold it —
+  // only SUPER_ADMIN (hardcoded bypass in PermissionsService) reaches this route.
+  @Delete(':id')
+  @RequirePermission('users.delete')
+  remove(@Param('id') id: string) {
+    return this.users.remove(id);
   }
 }

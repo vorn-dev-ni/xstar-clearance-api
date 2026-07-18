@@ -116,4 +116,23 @@ export class UsersService {
     });
     return this.withAvatar(user);
   }
+
+  async remove(id: string) {
+    await this.findOne(id);
+    try {
+      await this.prisma.user.delete({ where: { id } });
+      return { id };
+    } catch (err) {
+      // Foreign-key conflicts (user referenced by created records) surface here.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2003'
+      ) {
+        throw new ConflictException(
+          'This user has linked records and cannot be deleted; deactivate them instead.',
+        );
+      }
+      throw err;
+    }
+  }
 }

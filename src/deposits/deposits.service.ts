@@ -7,10 +7,10 @@ import {
 } from '@prisma/client';
 import { ACCOUNT_CODES } from '../common/accounting.constants';
 import { paginationMeta, toSkipTake } from '../common/pagination';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { JournalService } from '../journal/journal.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
+import { ListDepositsDto } from './dto/list-deposits.dto';
 
 const depositInclude = {
   customer: { select: { nameEn: true } },
@@ -75,16 +75,18 @@ export class DepositsService {
     });
   }
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: ListDepositsDto) {
+    const where = buildWhere(query);
     const { skip, take } = toSkipTake(query.page, query.limit);
     const [data, total] = await this.prisma.$transaction([
       this.prisma.deposit.findMany({
+        where,
         include: depositInclude,
         orderBy: { depositDate: 'desc' },
         skip,
         take,
       }),
-      this.prisma.deposit.count(),
+      this.prisma.deposit.count({ where }),
     ]);
     return { data, pagination: paginationMeta(total, query.page, query.limit) };
   }
@@ -154,6 +156,26 @@ export class DepositsService {
       return updated;
     });
   }
+}
+
+function buildWhere(query: ListDepositsDto): Prisma.DepositWhereInput {
+  const depositDate =
+    query.dateFrom || query.dateTo
+      ? {
+          gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
+          lte: query.dateTo ? new Date(query.dateTo) : undefined,
+        }
+      : undefined;
+  return {
+    status: query.status,
+    customerId: query.customerId,
+    supplierId: query.supplierId,
+    clearanceJobId: query.clearanceJobId,
+    depositNumber: query.search
+      ? { contains: query.search, mode: 'insensitive' }
+      : undefined,
+    depositDate,
+  };
 }
 
 async function nextDepositNumber(

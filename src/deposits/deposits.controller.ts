@@ -11,8 +11,8 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../permissions/require-permission.decorator';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CreateDepositDto } from './dto/create-deposit.dto';
+import { ListDepositsDto } from './dto/list-deposits.dto';
 import { UpdateDepositStatusDto } from './dto/update-deposit-status.dto';
 import { DepositsService } from './deposits.service';
 
@@ -30,7 +30,7 @@ export class DepositsController {
   }
 
   @Get()
-  findAll(@Query() query: PaginationQueryDto) {
+  findAll(@Query() query: ListDepositsDto) {
     return this.deposits.findAll(query);
   }
 

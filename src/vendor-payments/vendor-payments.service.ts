@@ -77,9 +77,33 @@ export class VendorPaymentsService {
   }
 
   async findAll(query: ListVendorPaymentsDto) {
+    const paymentDate =
+      query.dateFrom || query.dateTo
+        ? {
+            gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
+            lte: query.dateTo ? new Date(query.dateTo) : undefined,
+          }
+        : undefined;
     const where: Prisma.VendorPaymentWhereInput = {
       supplierId: query.supplierId,
       clearanceJobId: query.clearanceJobId,
+      method: query.method,
+      paymentDate,
+      ...(query.search
+        ? {
+            OR: [
+              {
+                paymentNumber: { contains: query.search, mode: 'insensitive' },
+              },
+              { supplierName: { contains: query.search, mode: 'insensitive' } },
+              {
+                supplier: {
+                  nameEn: { contains: query.search, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
     };
     const { skip, take } = toSkipTake(query.page, query.limit);
     const [data, total] = await this.prisma.$transaction([
