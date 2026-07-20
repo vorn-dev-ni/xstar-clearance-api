@@ -10,6 +10,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { PermissionsService } from '../permissions/permissions.service';
 import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateClearanceJobDto } from './dto/create-clearance-job.dto';
 import { ListClearanceJobsDto } from './dto/list-clearance-jobs.dto';
@@ -21,7 +22,10 @@ import { OperationsService } from './operations.service';
 @RequirePermission('operation.view')
 @Controller('clearance-jobs')
 export class OperationsController {
-  constructor(private readonly operations: OperationsService) {}
+  constructor(
+    private readonly operations: OperationsService,
+    private readonly permissions: PermissionsService,
+  ) {}
 
   @Post()
   @RequirePermission('operation.edit')
@@ -41,8 +45,14 @@ export class OperationsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.operations.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    // Financials/costing (incomes, expenses, deposits, profit) are accounting
+    // data — only include them for users who can view accounting.
+    const canViewAccounting = await this.permissions.has(
+      user.role,
+      'accounting.view',
+    );
+    return this.operations.findOne(id, canViewAccounting);
   }
 
   @Patch(':id')

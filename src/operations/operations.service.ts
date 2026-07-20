@@ -117,7 +117,12 @@ export class OperationsService {
     return { data, pagination: paginationMeta(total, query.page, query.limit) };
   }
 
-  async findOne(id: string) {
+  /**
+   * @param canViewAccounting when false, financial data (incomes, expenses,
+   *   deposits, profit) is omitted — these belong to the accounting module and
+   *   must not leak to operation-only users.
+   */
+  async findOne(id: string, canViewAccounting = false) {
     const job = await this.prisma.clearanceJob.findUnique({
       where: { id },
       include: {
@@ -135,54 +140,63 @@ export class OperationsService {
         incomeRecord: true,
         recordItems: { orderBy: { itemNumber: 'asc' } },
         expenseItems: { orderBy: { itemNumber: 'asc' } },
-        expenses: {
-          select: {
-            id: true,
-            recordNumber: true,
-            recordDate: true,
-            description: true,
-            amount: true,
-            taxAmount: true,
-            deposit: true,
-            actualCost: true,
-            currency: true,
-            status: true,
-            approvalStatus: true,
-          },
-          orderBy: { recordDate: 'desc' },
-        },
-        incomes: {
-          select: {
-            id: true,
-            recordNumber: true,
-            recordDate: true,
-            description: true,
-            amount: true,
-            currency: true,
-            status: true,
-          },
-          orderBy: { recordDate: 'desc' },
-        },
-        deposits: {
-          select: {
-            id: true,
-            depositNumber: true,
-            depositDate: true,
-            amount: true,
-            currency: true,
-            status: true,
-            releasedDate: true,
-          },
-          orderBy: { depositDate: 'desc' },
-        },
+        ...(canViewAccounting
+          ? {
+              expenses: {
+                select: {
+                  id: true,
+                  recordNumber: true,
+                  recordDate: true,
+                  description: true,
+                  amount: true,
+                  taxAmount: true,
+                  deposit: true,
+                  actualCost: true,
+                  currency: true,
+                  status: true,
+                  approvalStatus: true,
+                },
+                orderBy: { recordDate: 'desc' as const },
+              },
+              incomes: {
+                select: {
+                  id: true,
+                  recordNumber: true,
+                  recordDate: true,
+                  description: true,
+                  amount: true,
+                  currency: true,
+                  status: true,
+                },
+                orderBy: { recordDate: 'desc' as const },
+              },
+              deposits: {
+                select: {
+                  id: true,
+                  depositNumber: true,
+                  depositDate: true,
+                  amount: true,
+                  currency: true,
+                  status: true,
+                  releasedDate: true,
+                },
+                orderBy: { depositDate: 'desc' as const },
+              },
+            }
+          : {}),
       },
     });
     if (!job) throw new NotFoundException('Clearance job not found');
 
-    const actualRevenue = sumAmounts(job.incomes);
+    // Operation-only users get the job without any financials/costing data.
+    if (!canViewAccounting) {
+      return { ...job, financials: null };
+    }
+
+    const actualRevenue = sumAmounts(job.incomes ?? []);
     // Costing uses the client's actual-cost basis (Amount + Tax − Deposit),
     // not the raw invoiced amount.
-    const actualCost = sumActualCost(job.expenses);
+    const actualCost = sumActualCost(job.expenses ?? []);
     const estimatedRevenue =
       job.estimatedRevenue != null ? Number(job.estimatedRevenue) : null;
     const estimatedCost =
