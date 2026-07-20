@@ -28,8 +28,8 @@ export const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   // Secret used to sign/verify JWT access tokens.
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
-  // Access-token lifetime (any `ms`/jsonwebtoken duration string, e.g. `24h`).
-  JWT_EXPIRY: z.string().default('24h'),
+  // Access-token lifetime (any `ms`/jsonwebtoken duration string, e.g. `7d`).
+  JWT_EXPIRY: z.string().default('7d'),
 
   // Rate limiting: window length (ms) and max requests per window per client IP.
   THROTTLE_TTL: z.coerce.number().int().positive().default(60000),
