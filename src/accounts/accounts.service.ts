@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { ListAccountsDto } from './dto/list-accounts.dto';
+import { paginationMeta, toSkipTake } from '../common/pagination';
 
 @Injectable()
 export class AccountsService {
@@ -27,11 +28,20 @@ export class AccountsService {
   }
 
   async findAll(query: ListAccountsDto) {
-    const data = await this.prisma.account.findMany({
-      where: { type: query.type },
-      orderBy: { code: 'asc' },
-    });
-    return { data };
+    const { page, limit, type } = query;
+    const { skip, take } = toSkipTake(page, limit);
+
+    const [data, total] = await Promise.all([
+      this.prisma.account.findMany({
+        where: { type },
+        orderBy: { code: 'asc' },
+        skip,
+        take,
+      }),
+      this.prisma.account.count({ where: { type } }),
+    ]);
+
+    return { data, pagination: paginationMeta(total, page, limit) };
   }
 
   async findOne(id: string) {
