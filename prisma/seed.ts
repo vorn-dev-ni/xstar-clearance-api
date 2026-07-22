@@ -67,6 +67,13 @@ const ACCOUNTS: Array<{
   { code: '2300', nameEn: 'VAT Payable', type: AccountType.LIABILITY, category: AccountCategory.VAT_PAYABLE },
 ];
 
+const WAREHOUSE_LOCATIONS = [
+  { id: 'loc_kwb', name: 'KWB', description: 'Main bonded storage area' },
+  { id: 'loc_showroom', name: 'SHOWROOM', description: 'Customer viewing location' },
+  { id: 'loc_released', name: 'RELEASED', description: 'Outbound / Duty paid' },
+  { id: 'loc_other', name: 'OTHER', description: 'Miscellaneous' }
+];
+
 async function main(): Promise<void> {
   // 1. Chart of accounts — idempotent by unique `code`.
   const accountsMap: Record<string, string> = {};
@@ -346,6 +353,16 @@ async function main(): Promise<void> {
     suppliersMap[s.code] = created.id;
   }
   console.log(`✅ Seeded ${SUPPLIERS.length} suppliers`);
+
+  // Warehouse Locations
+  for (const loc of WAREHOUSE_LOCATIONS) {
+    await prisma.warehouseLocation.upsert({
+      where: { name: loc.name },
+      update: { description: loc.description },
+      create: loc,
+    });
+  }
+  console.log(`✅ Seeded ${WAREHOUSE_LOCATIONS.length} warehouse locations`);
 
   // 6. Customers — key Cambodian importers & exporters across garments, electronics, agriculture, and construction.
   const CUSTOMERS = [

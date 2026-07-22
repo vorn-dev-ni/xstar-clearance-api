@@ -42,12 +42,13 @@ model BondedWarehouseItem {
   grossWeightKg Decimal? @db.Decimal(15, 3)
 
   // Warehouse status & stock movement
-  receivedDateKwb DateTime? // Received Date In KWB
-  currentLocation BondedItemLocation @default(KWB)
-  releasedQty     Int                @default(0)
-  stockBalance    Int                @default(1) // quantity - releasedQty (maintained by service)
-  dutyStatus      BondedDutyStatus   @default(UNPAID)
-  validDays       Int? // duty suspension validity (e.g. 180)
+  receivedDateKwb   DateTime? // Received Date In KWB
+  currentLocationId String?
+  currentLocation   WarehouseLocation? @relation(fields: [currentLocationId], references: [id])
+  releasedQty       Int                @default(0)
+  stockBalance      Int                @default(1) // quantity - releasedQty (maintained by service)
+  dutyStatus        BondedDutyStatus   @default(UNPAID)
+  validDays         Int? // duty suspension validity (e.g. 180)
 
   // Customs declaration references
   etaDate     DateTime?
@@ -67,7 +68,7 @@ model BondedWarehouseItem {
   @@index([clearanceJobId])
   @@index([blNumber])
   @@index([vin])
-  @@index([currentLocation])
+  @@index([currentLocationId])
   @@index([dutyStatus])
   @@index([receivedDateKwb])
 }
@@ -81,14 +82,16 @@ model BondedWarehouseMovement {
   itemId String
   item   BondedWarehouseItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  type         BondedMovementType
-  date         DateTime            @default(now())
-  quantity     Int                 @default(1)
-  fromLocation BondedItemLocation?
-  toLocation   BondedItemLocation?
-  dutyPaid     Boolean             @default(false) // for RELEASE: released under duty payment
-  sadId        String? // customs declaration for the release (e.g. IM4)
-  note         String?
+  type           BondedMovementType
+  date           DateTime           @default(now())
+  quantity       Int                @default(1)
+  fromLocationId String?
+  fromLocation   WarehouseLocation? @relation("MovementFromLocation", fields: [fromLocationId], references: [id])
+  toLocationId   String?
+  toLocation     WarehouseLocation? @relation("MovementToLocation", fields: [toLocationId], references: [id])
+  dutyPaid       Boolean            @default(false) // for RELEASE: released under duty payment
+  sadId          String? // customs declaration for the release (e.g. IM4)
+  note           String?
 
   createdBy String
   createdAt DateTime @default(now())
@@ -97,11 +100,17 @@ model BondedWarehouseMovement {
   @@index([date])
 }
 
-enum BondedItemLocation {
-  KWB // in the bonded warehouse
-  SHOWROOM // transferred to showroom (still duty-suspended)
-  RELEASED // released / outbound
-  OTHER
+model WarehouseLocation {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items         BondedWarehouseItem[]
+  movementsFrom BondedWarehouseMovement[] @relation("MovementFromLocation")
+  movementsTo   BondedWarehouseMovement[] @relation("MovementToLocation")
 }
 
 enum BondedDutyStatus {

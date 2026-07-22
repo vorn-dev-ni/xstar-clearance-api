@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BondedDutyStatus, BondedItemLocation } from '@prisma/client';
+import { BondedDutyStatus } from '@prisma/client';
 import {
   IsEnum,
   IsInt,
@@ -125,10 +125,10 @@ export class CreateBondedItemDto {
   @IsISO8601()
   receivedDateKwb?: string;
 
-  @ApiPropertyOptional({ enum: BondedItemLocation, default: 'KWB' })
+  @ApiPropertyOptional({ description: 'ID of the WarehouseLocation' })
+  @IsString()
   @IsOptional()
-  @IsEnum(BondedItemLocation)
-  currentLocation?: BondedItemLocation;
+  currentLocationId?: string;
 
   @ApiPropertyOptional({ enum: BondedDutyStatus, default: 'UNPAID' })
   @IsOptional()

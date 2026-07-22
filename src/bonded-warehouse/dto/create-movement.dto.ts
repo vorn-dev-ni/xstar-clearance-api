@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BondedItemLocation, BondedMovementType } from '@prisma/client';
+import { BondedMovementType } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
@@ -27,12 +27,18 @@ export class CreateMovementDto {
   quantity?: number;
 
   @ApiPropertyOptional({
-    enum: BondedItemLocation,
-    description: 'Destination location',
+    description: 'ID of the source WarehouseLocation',
   })
   @IsOptional()
-  @IsEnum(BondedItemLocation)
-  toLocation?: BondedItemLocation;
+  @IsString()
+  fromLocationId?: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the destination WarehouseLocation',
+  })
+  @IsOptional()
+  @IsString()
+  toLocationId?: string;
 
   @ApiPropertyOptional({
     description: 'Released under duty payment (RELEASE only)',

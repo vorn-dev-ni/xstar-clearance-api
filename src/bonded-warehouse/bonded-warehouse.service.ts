@@ -3,12 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  BondedDutyStatus,
-  BondedItemLocation,
-  BondedMovementType,
-  Prisma,
-} from '@prisma/client';
+import { BondedDutyStatus, BondedMovementType, Prisma } from '@prisma/client';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBondedItemDto } from './dto/create-bonded-item.dto';
@@ -119,7 +114,7 @@ export class BondedWarehouseService {
     if (!item) throw new NotFoundException('Bonded warehouse item not found');
 
     const qty = dto.quantity ?? 1;
-    const fromLocation = item.currentLocation;
+    const fromLocationId = item.currentLocationId;
 
     const data: Prisma.BondedWarehouseItemUpdateInput = {};
 
@@ -133,12 +128,21 @@ export class BondedWarehouseService {
       const stockBalance = item.quantity - releasedQty;
       data.releasedQty = releasedQty;
       data.stockBalance = stockBalance;
-      if (stockBalance === 0)
-        data.currentLocation = BondedItemLocation.RELEASED;
+      if (stockBalance === 0) {
+        let releasedLoc = await this.prisma.warehouseLocation.findUnique({
+          where: { name: 'RELEASED' },
+        });
+        if (!releasedLoc)
+          releasedLoc = await this.prisma.warehouseLocation.create({
+            data: { name: 'RELEASED' },
+          });
+        data.currentLocation = { connect: { id: releasedLoc.id } };
+      }
       if (dto.dutyPaid) data.dutyStatus = BondedDutyStatus.PAID;
     } else {
       // TRANSFER / LOCATION_UPDATE
-      if (dto.toLocation) data.currentLocation = dto.toLocation;
+      if (dto.toLocationId)
+        data.currentLocation = { connect: { id: dto.toLocationId } };
     }
 
     const [movement] = await this.prisma.$transaction([
@@ -147,8 +151,8 @@ export class BondedWarehouseService {
           itemId,
           type: dto.type,
           quantity: qty,
-          fromLocation,
-          toLocation: dto.toLocation ?? null,
+          fromLocationId,
+          toLocationId: dto.toLocationId ?? null,
           dutyPaid: dto.dutyPaid ?? false,
           sadId: dto.sadId,
           note: dto.note,
@@ -175,6 +179,7 @@ export class BondedWarehouseService {
         clearanceJobId: query.clearanceJobId,
         blNumber: query.blNumber,
       },
+      include: { currentLocation: true },
       orderBy: { receivedDateKwb: 'asc' },
     });
 
@@ -201,10 +206,8 @@ export class BondedWarehouseService {
 
       row.totalReceived += it.quantity;
       const inStock = it.stockBalance;
-      if (it.currentLocation === BondedItemLocation.KWB)
-        row.qtyInKwb += inStock;
-      if (it.currentLocation === BondedItemLocation.SHOWROOM)
-        row.qtyInShowroom += inStock;
+      if (it.currentLocation?.name === 'KWB') row.qtyInKwb += inStock;
+      if (it.currentLocation?.name === 'SHOWROOM') row.qtyInShowroom += inStock;
 
       if (it.dutyStatus === BondedDutyStatus.PAID) {
         row.qtyDutyPaid += it.releasedQty || it.quantity;
@@ -251,7 +254,7 @@ function buildWhere(
   return {
     clearanceJobId: query.clearanceJobId,
     blNumber: query.blNumber,
-    currentLocation: query.currentLocation,
+    currentLocationId: query.currentLocationId,
     dutyStatus: query.dutyStatus,
     ...(query.search
       ? {

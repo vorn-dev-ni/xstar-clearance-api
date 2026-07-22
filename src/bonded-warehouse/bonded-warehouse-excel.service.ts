@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { BondedItemLocation } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBondedItemDto } from './dto/create-bonded-item.dto';
@@ -38,7 +37,7 @@ const STOCK_DETAIL_COLUMNS: ColumnSpec[] = [
   { header: 'Gross Weight (KGS)', field: 'grossWeightKg', type: 'decimal' },
   { header: 'Received Date In KWB', field: 'receivedDateKwb', type: 'date' },
   { header: 'TRANSFER/LOCATION UPDATE/OUTBOUND', field: null },
-  { header: 'Current Location', field: 'currentLocation', type: 'location' },
+  { header: 'Current Location', field: 'currentLocationId', type: 'location' },
   { header: "Released QTY' (Unit)", field: 'releasedQty', type: 'int' },
   { header: 'Stock Balance (Unit)', field: 'stockBalance', type: 'int' },
   { header: 'Valid Days', field: 'validDays', type: 'int' },
@@ -185,6 +184,19 @@ export class BondedWarehouseExcelService {
       // releasedQty/stockBalance are managed by the service; drop imported values.
       delete dto.releasedQty;
       delete dto.stockBalance;
+
+      if (dto.currentLocationId) {
+        const locName = dto.currentLocationId as string;
+        let loc = await this.prisma.warehouseLocation.findUnique({
+          where: { name: locName },
+        });
+        if (!loc)
+          loc = await this.prisma.warehouseLocation.create({
+            data: { name: locName },
+          });
+        dto.currentLocationId = loc.id;
+      }
+
       await this.bonded.create(dto as unknown as CreateBondedItemDto, userId);
       created++;
     }
@@ -235,11 +247,10 @@ function coerce(value: ExcelJS.CellValue, type: ColumnSpec['type']): unknown {
     }
     case 'location': {
       const v = toStr(raw).trim().toUpperCase();
-      if (v.includes('SHOWROOM')) return BondedItemLocation.SHOWROOM;
-      if (v.includes('RELEASE') || v.includes('OUTBOUND'))
-        return BondedItemLocation.RELEASED;
-      if (v.includes('KWB')) return BondedItemLocation.KWB;
-      return v ? BondedItemLocation.OTHER : null;
+      if (v.includes('SHOWROOM')) return 'SHOWROOM';
+      if (v.includes('RELEASE') || v.includes('OUTBOUND')) return 'RELEASED';
+      if (v.includes('KWB')) return 'KWB';
+      return v || null;
     }
     default:
       return toStr(raw).trim();

@@ -27,6 +27,7 @@ import { TaxModule } from './tax/tax.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
 import { VendorPaymentsModule } from './vendor-payments/vendor-payments.module';
+import { WarehouseLocationsModule } from './warehouse-locations/warehouse-locations.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { VendorPaymentsModule } from './vendor-payments/vendor-payments.module';
     VendorPaymentsModule,
     CostingModule,
     BondedWarehouseModule,
+    WarehouseLocationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

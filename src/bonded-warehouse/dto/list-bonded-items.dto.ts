@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BondedDutyStatus, BondedItemLocation } from '@prisma/client';
+import { BondedDutyStatus } from '@prisma/client';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
@@ -14,10 +14,10 @@ export class ListBondedItemsDto extends PaginationQueryDto {
   @IsString()
   blNumber?: string;
 
-  @ApiPropertyOptional({ enum: BondedItemLocation })
+  @ApiPropertyOptional({ description: 'Filter by WarehouseLocation ID' })
   @IsOptional()
-  @IsEnum(BondedItemLocation)
-  currentLocation?: BondedItemLocation;
+  @IsString()
+  currentLocationId?: string;
 
   @ApiPropertyOptional({ enum: BondedDutyStatus })
   @IsOptional()
