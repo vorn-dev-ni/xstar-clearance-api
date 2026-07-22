@@ -66,6 +66,7 @@ const KEEP_TABLES = [
   'CompanySettings',
   'TaxRate',
   'PaymentTerm',
+  'WarehouseLocation',
 ] as const;
 
 function dbHost(url: string | undefined): string {

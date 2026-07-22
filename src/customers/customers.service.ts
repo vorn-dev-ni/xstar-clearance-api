@@ -31,9 +31,12 @@ export class CustomersService {
   }
 
   async create(dto: CreateCustomerDto) {
+    const code =
+      dto.code ||
+      `CUST-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     try {
       const customer = await this.prisma.customer.create({
-        data: { ...dto, registrationDate: new Date(dto.registrationDate) },
+        data: { ...dto, code, registrationDate: new Date(dto.registrationDate) },
       });
       return this.withImage(customer);
     } catch (e) {
@@ -49,7 +52,6 @@ export class CustomersService {
             OR: [
               { nameEn: { contains: query.search, mode: 'insensitive' } },
               { code: { contains: query.search, mode: 'insensitive' } },
-              { taxId: { contains: query.search, mode: 'insensitive' } },
             ],
           }
         : {}),
@@ -106,13 +108,18 @@ export class CustomersService {
     }
   }
 
+  async remove(id: string) {
+    await this.findRaw(id);
+    return this.prisma.customer.delete({ where: { id } });
+  }
+
   private mapUniqueError(e: unknown): unknown {
     if (
       e instanceof Prisma.PrismaClientKnownRequestError &&
       e.code === 'P2002'
     ) {
       return new ConflictException(
-        'A customer with this code or tax ID already exists',
+        'A customer with this code already exists',
       );
     }
     return e;

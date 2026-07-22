@@ -68,6 +68,11 @@ export class SuppliersService {
     }
   }
 
+  async remove(id: string) {
+    await this.findOne(id);
+    return this.prisma.supplier.delete({ where: { id } });
+  }
+
   private mapUniqueError(e: unknown): unknown {
     if (
       e instanceof Prisma.PrismaClientKnownRequestError &&

@@ -8,7 +8,6 @@ model Customer {
   nameEn        String
   nameKh        String?
   nameCn        String?
-  taxId         String? @unique // VAT/Tax ID
   address       String
   commune       String?
   district      String?
@@ -39,6 +38,6 @@ model Customer {
   paymentTermsRec PaymentTerm[]
   clearanceJobs   ClearanceJob[]
 
-  @@index([taxId])
+
   @@index([code])
 }

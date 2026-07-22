@@ -8,9 +8,10 @@ import {
 } from 'class-validator';
 
 export class CreateCustomerDto {
-  @ApiProperty({ example: '027-01-26' })
+  @ApiPropertyOptional({ example: '027-01-26' })
+  @IsOptional()
   @IsString()
-  code!: string;
+  code?: string;
 
   @ApiProperty()
   @IsString()
@@ -26,10 +27,7 @@ export class CreateCustomerDto {
   @IsString()
   nameCn?: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  taxId?: string;
+
 
   @ApiProperty()
   @IsString()

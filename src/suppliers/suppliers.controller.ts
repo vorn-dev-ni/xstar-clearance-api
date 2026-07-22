@@ -6,6 +6,7 @@ import {
   Patch,
   Post,
   Query,
+  Delete,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { RequirePermission } from '../permissions/require-permission.decorator';
@@ -41,5 +42,11 @@ export class SuppliersController {
   @RequirePermission('operation.edit')
   update(@Param('id') id: string, @Body() dto: UpdateSupplierDto) {
     return this.suppliers.update(id, dto);
+  }
+
+  @Delete(':id')
+  @RequirePermission('operation.edit')
+  remove(@Param('id') id: string) {
+    return this.suppliers.remove(id);
   }
 }
