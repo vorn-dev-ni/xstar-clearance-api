@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../storage/s3.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersDto } from './dto/list-users.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 const SALT_ROUNDS = 10;
@@ -112,6 +113,17 @@ export class UsersService {
     const user = await this.prisma.user.update({
       where: { id },
       data: dto,
+      select: publicSelect,
+    });
+    return this.withAvatar(user);
+  }
+
+  async resetPassword(id: string, dto: ResetPasswordDto) {
+    await this.findOne(id);
+    const password = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { password },
       select: publicSelect,
     });
     return this.withAvatar(user);

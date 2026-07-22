@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersDto } from './dto/list-users.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -42,6 +43,12 @@ export class UsersController {
   @RequirePermission('users.edit')
   update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.users.update(id, dto);
+  }
+
+  @Post(':id/reset-password')
+  @RequirePermission('users.edit')
+  resetPassword(@Param('id') id: string, @Body() dto: ResetPasswordDto) {
+    return this.users.resetPassword(id, dto);
   }
 
   // `users.delete` is not a catalog capability, so no stored role can hold it —
