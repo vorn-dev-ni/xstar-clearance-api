@@ -89,8 +89,6 @@ async function main(): Promise<void> {
 
   // 2. Bootstrap admin and demo users with varied roles.
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@stlogistics.com';
-  const defaultPassword = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!';
-  const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
   const USERS = [
     {
@@ -100,72 +98,95 @@ async function main(): Promise<void> {
       role: UserRole.SUPER_ADMIN,
       department: 'Executive Management',
       phone: '017-858-882',
+      password: process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!',
     },
     {
-      email: 'sokha.chan@stlogistics.com',
-      firstName: 'Sokha',
-      lastName: 'Chan',
+      email: 'accounting@ststar.com',
+      firstName: 'Accounting',
+      lastName: 'User',
       role: UserRole.ACCOUNTING,
       department: 'Finance & Accounting',
       phone: '012-345-678',
+      password: 'Test@12345',
     },
     {
-      email: 'virak.prom@stlogistics.com',
-      firstName: 'Virak',
-      lastName: 'Prom',
+      email: 'operation@ststar.com',
+      firstName: 'Operation',
+      lastName: 'User',
       role: UserRole.OPERATION,
       department: 'Operations & Clearance',
       phone: '017-889-990',
+      password: 'Test@12345',
     },
     {
-      email: 'dara.seng@stlogistics.com',
-      firstName: 'Dara',
-      lastName: 'Seng',
-      role: UserRole.OPERATION,
-      department: 'Customs Brokerage',
-      phone: '016-554-332',
-    },
-    {
-      email: 'sophea.meas@stlogistics.com',
-      firstName: 'Sophea',
-      lastName: 'Meas',
-      role: UserRole.OPERATION,
-      department: 'Logistics & Trucking',
-      phone: '093-221-119',
-    },
-    {
-      email: 'client.viewer@stlogistics.com',
-      firstName: 'Client',
-      lastName: 'Demo Viewer',
+      email: 'owner@ststar.com',
+      firstName: 'Owner',
+      lastName: 'User',
       role: UserRole.OWNER,
       department: 'Audit & Review',
       phone: '085-998-877',
+      password: 'Test@12345',
     },
   ];
 
   const usersMap: Record<string, string> = {};
   for (const u of USERS) {
+    const { password, ...userData } = u;
+    const passwordHash = await bcrypt.hash(password, 10);
     const created = await prisma.user.upsert({
-      where: { email: u.email },
+      where: { email: userData.email },
       update: {
-        firstName: u.firstName,
-        lastName: u.lastName,
-        role: u.role,
-        department: u.department,
-        phone: u.phone,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        role: userData.role,
+        department: userData.department,
+        phone: userData.phone,
+        password: passwordHash,
       },
       create: {
-        ...u,
+        ...userData,
         password: passwordHash,
       },
     });
-    usersMap[u.email] = created.id;
+    usersMap[userData.email] = created.id;
   }
-  console.log(`✅ Seeded ${USERS.length} system users across all roles (Password: ${defaultPassword})`);
+  console.log(`✅ Seeded ${USERS.length} system users across all roles`);
 
   const adminUserId = usersMap[adminEmail];
-  const accountantUserId = usersMap['sokha.chan@stlogistics.com'];
-  const staffUserId = usersMap['dara.seng@stlogistics.com'];
+  const accountantUserId = usersMap['accounting@ststar.com'];
+  const staffUserId = usersMap['operation@ststar.com'];
+
+  const DEFAULT_ROLE_PERMISSIONS = {
+    ACCOUNTING: [
+      'accounting.view', 'accounting.edit', 'accounting.action',
+      'operation.view', 'documents.view', 'documents.edit', 'documents.action',
+      'reports.view', 'audit.view',
+    ],
+    OWNER: [
+      'operation.view', 'accounting.view', 'documents.view',
+      'reports.view', 'audit.view',
+    ],
+    OPERATION: [
+      'operation.view', 'operation.edit', 'operation.action',
+      'documents.view', 'documents.edit',
+    ],
+  };
+
+  let permissionsSeeded = 0;
+  for (const [role, perms] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
+    for (const permission of perms) {
+      await prisma.rolePermission.upsert({
+        where: { role_permission: { role: role as UserRole, permission } },
+        update: {},
+        create: {
+          role: role as UserRole,
+          permission,
+        },
+      });
+      permissionsSeeded++;
+    }
+  }
+  console.log(`✅ Seeded ${permissionsSeeded} role permissions`);
 
   // 3. Company settings — single row keyed by a stable VAT id.
   await prisma.companySettings.upsert({
