@@ -3,7 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { JobStatus, Prisma } from '@prisma/client';
+import { AuditAction, JobStatus, Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -16,7 +17,10 @@ import { UpdateClearanceJobDto } from './dto/update-clearance-job.dto';
 
 @Injectable()
 export class OperationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(dto: CreateClearanceJobDto, userId: string) {
     const {
@@ -35,7 +39,7 @@ export class OperationsService {
       ...rest
     } = dto as Record<string, any>;
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const job = await this.prisma.$transaction(async (tx) => {
         const jobNumber =
           dto.jobNumber ||
           (await nextJobNumber(tx, dto.transaction, new Date(dto.date)));
@@ -68,6 +72,14 @@ export class OperationsService {
           } as Prisma.ClearanceJobUncheckedCreateInput,
         });
       });
+      await this.audit.log({
+        userId,
+        entityType: 'ClearanceJob',
+        entityId: job.id,
+        action: AuditAction.CREATE,
+        after: { jobNumber: job.jobNumber, status: job.status },
+      });
+      return job;
     } catch (e) {
       throw this.mapUniqueError(e);
     }
@@ -217,8 +229,8 @@ export class OperationsService {
     };
   }
 
-  async update(id: string, dto: UpdateClearanceJobDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateClearanceJobDto, userId: string) {
+    const existing = await this.findOne(id);
     const {
       recordItems,
       expenseItems,
@@ -249,7 +261,7 @@ export class OperationsService {
     }
 
     try {
-      return await this.prisma.clearanceJob.update({
+      const updated = await this.prisma.clearanceJob.update({
         where: { id },
         data: {
           ...rest,
@@ -280,6 +292,15 @@ export class OperationsService {
             : {}),
         },
       });
+      await this.audit.log({
+        userId,
+        entityType: 'ClearanceJob',
+        entityId: id,
+        action: AuditAction.UPDATE,
+        before: { jobNumber: existing.jobNumber, status: existing.status },
+        after: { jobNumber: updated.jobNumber, status: updated.status },
+      });
+      return updated;
     } catch (e) {
       throw this.mapUniqueError(e);
     }

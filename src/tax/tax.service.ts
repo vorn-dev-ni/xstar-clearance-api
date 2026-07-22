@@ -4,17 +4,31 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { FilingStatus, Prisma } from '@prisma/client';
+import { AuditAction, FilingStatus, Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaxFilingDto } from './dto/create-tax-filing.dto';
 
 @Injectable()
 export class TaxService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
-  async create(dto: CreateTaxFilingDto) {
+  async create(dto: CreateTaxFilingDto, userId: string) {
     try {
       const filing = await this.prisma.taxFilingRecord.create({ data: dto });
+      await this.audit.log({
+        userId,
+        entityType: 'TaxFiling',
+        entityId: filing.id,
+        action: AuditAction.CREATE,
+        after: {
+          filingType: filing.filingType,
+          filingPeriod: filing.filingPeriod,
+        },
+      });
       return {
         id: filing.id,
         filingType: filing.filingType,
@@ -42,7 +56,7 @@ export class TaxService {
     });
   }
 
-  async submit(id: string) {
+  async submit(id: string, userId: string) {
     const filing = await this.prisma.taxFilingRecord.findUnique({
       where: { id },
     });
@@ -60,6 +74,14 @@ export class TaxService {
         filedDate: new Date(),
         receiptNumber,
       },
+    });
+    await this.audit.log({
+      userId,
+      entityType: 'TaxFiling',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      before: { status: filing.status },
+      after: { status: updated.status },
     });
     return {
       id: updated.id,

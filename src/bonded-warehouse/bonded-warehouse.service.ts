@@ -3,7 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BondedDutyStatus, BondedMovementType, Prisma } from '@prisma/client';
+import {
+  AuditAction,
+  BondedDutyStatus,
+  BondedMovementType,
+  Prisma,
+} from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBondedItemDto } from './dto/create-bonded-item.dto';
@@ -28,11 +34,14 @@ export interface StockMovementSummaryRow {
 
 @Injectable()
 export class BondedWarehouseService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(dto: CreateBondedItemDto, userId: string) {
     const quantity = dto.quantity ?? 1;
-    return this.prisma.bondedWarehouseItem.create({
+    const item = await this.prisma.bondedWarehouseItem.create({
       data: {
         ...toItemData(dto),
         blNumber: dto.blNumber,
@@ -42,6 +51,14 @@ export class BondedWarehouseService {
         createdBy: userId,
       },
     });
+    await this.audit.log({
+      userId,
+      entityType: 'BondedItem',
+      entityId: item.id,
+      action: AuditAction.CREATE,
+      after: { vin: item.vin, quantity: item.quantity },
+    });
+    return item;
   }
 
   async findAll(query: ListBondedItemsDto) {
@@ -74,7 +91,7 @@ export class BondedWarehouseService {
     return item;
   }
 
-  async update(id: string, dto: UpdateBondedItemDto) {
+  async update(id: string, dto: UpdateBondedItemDto, userId?: string) {
     const existing = await this.prisma.bondedWarehouseItem.findUnique({
       where: { id },
     });
@@ -85,7 +102,7 @@ export class BondedWarehouseService {
     const quantity = dto.quantity ?? existing.quantity;
     const stockBalance = quantity - existing.releasedQty;
 
-    return this.prisma.bondedWarehouseItem.update({
+    const updated = await this.prisma.bondedWarehouseItem.update({
       where: { id },
       data: {
         ...toItemData(dto),
@@ -94,11 +111,31 @@ export class BondedWarehouseService {
           : {}),
       },
     });
+    if (userId) {
+      await this.audit.log({
+        userId,
+        entityType: 'BondedItem',
+        entityId: id,
+        action: AuditAction.UPDATE,
+        before: { vin: existing.vin, quantity: existing.quantity },
+        after: { vin: updated.vin, quantity: updated.quantity },
+      });
+    }
+    return updated;
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, userId?: string) {
+    const existing = await this.findOne(id);
     await this.prisma.bondedWarehouseItem.delete({ where: { id } });
+    if (userId) {
+      await this.audit.log({
+        userId,
+        entityType: 'BondedItem',
+        entityId: id,
+        action: AuditAction.DELETE,
+        before: { vin: existing.vin, quantity: existing.quantity },
+      });
+    }
     return { id, deleted: true };
   }
 

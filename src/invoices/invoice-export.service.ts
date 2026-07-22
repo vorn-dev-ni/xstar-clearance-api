@@ -276,7 +276,7 @@ export class InvoiceExportService {
       [KH.address, 'Address', c.address ?? ''],
       [KH.telephone, 'Telephone N°', c.phone ?? ''],
       [KH.email, 'Email Address', c.email ?? ''],
-      [KH.vatTin, 'VAT TIN', c.taxId ?? ''],
+      [KH.vatTin, 'VAT TIN', ''],
     ];
     let y = doc.y + 4;
     for (const [kh, en, value] of rows) {

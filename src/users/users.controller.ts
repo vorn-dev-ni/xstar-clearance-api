@@ -9,6 +9,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import type { AuthUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersDto } from './dto/list-users.dto';
@@ -25,8 +27,8 @@ export class UsersController {
 
   @Post()
   @RequirePermission('users.edit')
-  create(@Body() dto: CreateUserDto) {
-    return this.users.create(dto);
+  create(@Body() dto: CreateUserDto, @CurrentUser() user: AuthUser) {
+    return this.users.create(dto, user.userId);
   }
 
   @Get()
@@ -41,8 +43,12 @@ export class UsersController {
 
   @Patch(':id')
   @RequirePermission('users.edit')
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.users.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.users.update(id, dto, user.userId);
   }
 
   @Post(':id/reset-password')
@@ -55,7 +61,7 @@ export class UsersController {
   // only SUPER_ADMIN (hardcoded bypass in PermissionsService) reaches this route.
   @Delete(':id')
   @RequirePermission('users.delete')
-  remove(@Param('id') id: string) {
-    return this.users.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.users.remove(id, user.userId);
   }
 }

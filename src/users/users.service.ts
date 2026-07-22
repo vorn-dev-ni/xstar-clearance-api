@@ -3,7 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import * as bcrypt from 'bcryptjs';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
@@ -38,6 +39,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly s3: S3Service,
+    private readonly audit: AuditService,
   ) {}
 
   /** `avatarUrl` stores an S3 object key — resolve it to a presigned GET URL. */
@@ -46,7 +48,7 @@ export class UsersService {
     return { ...user, avatarUrl: await this.s3.presignGet(user.avatarUrl) };
   }
 
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, userId: string) {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -65,6 +67,13 @@ export class UsersService {
         phone: dto.phone,
       },
       select: publicSelect,
+    });
+    await this.audit.log({
+      userId,
+      entityType: 'User',
+      entityId: user.id,
+      action: AuditAction.CREATE,
+      after: { email: user.email, role: user.role },
     });
     return this.withAvatar(user);
   }
@@ -108,12 +117,20 @@ export class UsersService {
     return this.withAvatar(user);
   }
 
-  async update(id: string, dto: UpdateUserDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateUserDto, userId: string) {
+    const existing = await this.findOne(id);
     const user = await this.prisma.user.update({
       where: { id },
       data: dto,
       select: publicSelect,
+    });
+    await this.audit.log({
+      userId,
+      entityType: 'User',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      before: { email: existing.email, role: existing.role },
+      after: { email: user.email, role: user.role },
     });
     return this.withAvatar(user);
   }
@@ -129,10 +146,17 @@ export class UsersService {
     return this.withAvatar(user);
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, userId: string) {
+    const existing = await this.findOne(id);
     try {
       await this.prisma.user.delete({ where: { id } });
+      await this.audit.log({
+        userId,
+        entityType: 'User',
+        entityId: id,
+        action: AuditAction.DELETE,
+        before: { email: existing.email, role: existing.role },
+      });
       return { id };
     } catch (err) {
       // Foreign-key conflicts (user referenced by created records) surface here.

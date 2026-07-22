@@ -3,7 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -12,16 +13,27 @@ import { UpdateSupplierDto } from './dto/update-supplier.dto';
 
 @Injectable()
 export class SuppliersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
-  async create(dto: CreateSupplierDto) {
+  async create(dto: CreateSupplierDto, userId: string) {
     const code =
       dto.code ||
       `SUP-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     try {
-      return await this.prisma.supplier.create({
+      const supplier = await this.prisma.supplier.create({
         data: { ...dto, code },
       });
+      await this.audit.log({
+        userId,
+        entityType: 'Supplier',
+        entityId: supplier.id,
+        action: AuditAction.CREATE,
+        after: supplier,
+      });
+      return supplier;
     } catch (e) {
       throw this.mapUniqueError(e);
     }
@@ -59,18 +71,38 @@ export class SuppliersService {
     return supplier;
   }
 
-  async update(id: string, dto: UpdateSupplierDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateSupplierDto, userId: string) {
+    const existing = await this.findOne(id);
     try {
-      return await this.prisma.supplier.update({ where: { id }, data: dto });
+      const updated = await this.prisma.supplier.update({
+        where: { id },
+        data: dto,
+      });
+      await this.audit.log({
+        userId,
+        entityType: 'Supplier',
+        entityId: id,
+        action: AuditAction.UPDATE,
+        before: existing,
+        after: updated,
+      });
+      return updated;
     } catch (e) {
       throw this.mapUniqueError(e);
     }
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
-    return this.prisma.supplier.delete({ where: { id } });
+  async remove(id: string, userId: string) {
+    const existing = await this.findOne(id);
+    const deleted = await this.prisma.supplier.delete({ where: { id } });
+    await this.audit.log({
+      userId,
+      entityType: 'Supplier',
+      entityId: id,
+      action: AuditAction.DELETE,
+      before: existing,
+    });
+    return deleted;
   }
 
   private mapUniqueError(e: unknown): unknown {

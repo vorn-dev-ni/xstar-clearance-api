@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+  AuditAction,
   ContainerDepositStatus,
   EntryLineType,
   Prisma,
   ReferenceType,
 } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { ACCOUNT_CODES } from '../common/accounting.constants';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { JournalService } from '../journal/journal.service';
@@ -24,11 +26,12 @@ export class DepositsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly journal: JournalService,
+    private readonly audit: AuditService,
   ) {}
 
   /** Create a container deposit and post DR deposit account / CR bank. */
   async create(dto: CreateDepositDto, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const deposit = await this.prisma.$transaction(async (tx) => {
       const depositNumber = await nextDepositNumber(
         tx,
         new Date(dto.depositDate),
@@ -73,6 +76,17 @@ export class DepositsService {
 
       return deposit;
     });
+    await this.audit.log({
+      userId,
+      entityType: 'Deposit',
+      entityId: deposit.id,
+      action: AuditAction.CREATE,
+      after: {
+        depositNumber: deposit.depositNumber,
+        amount: Number(deposit.amount),
+      },
+    });
+    return deposit;
   }
 
   async findAll(query: ListDepositsDto) {
@@ -110,10 +124,9 @@ export class DepositsService {
     status: ContainerDepositStatus,
     userId: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      const deposit = await tx.deposit.findUnique({ where: { id } });
-      if (!deposit) throw new NotFoundException('Deposit not found');
-
+    const deposit = await this.prisma.deposit.findUnique({ where: { id } });
+    if (!deposit) throw new NotFoundException('Deposit not found');
+    const updated = await this.prisma.$transaction(async (tx) => {
       const becomingRefunded =
         status === ContainerDepositStatus.DEPOSIT_REFUNDED &&
         deposit.status !== ContainerDepositStatus.DEPOSIT_REFUNDED;
@@ -155,6 +168,15 @@ export class DepositsService {
 
       return updated;
     });
+    await this.audit.log({
+      userId,
+      entityType: 'Deposit',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      before: { status: deposit.status },
+      after: { status: updated.status },
+    });
+    return updated;
   }
 }
 

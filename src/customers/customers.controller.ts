@@ -9,6 +9,8 @@ import {
   Delete,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthUser } from '../auth/auth.types';
 import { RequirePermission } from '../permissions/require-permission.decorator';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { ListCustomersDto } from './dto/list-customers.dto';
@@ -24,8 +26,8 @@ export class CustomersController {
 
   @Post()
   @RequirePermission('operation.edit')
-  create(@Body() dto: CreateCustomerDto) {
-    return this.customers.create(dto);
+  create(@Body() dto: CreateCustomerDto, @CurrentUser() user: AuthUser) {
+    return this.customers.create(dto, user.userId);
   }
 
   @Get()
@@ -40,13 +42,17 @@ export class CustomersController {
 
   @Patch(':id')
   @RequirePermission('operation.edit')
-  update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
-    return this.customers.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateCustomerDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.customers.update(id, dto, user.userId);
   }
 
   @Delete(':id')
   @RequirePermission('operation.edit')
-  remove(@Param('id') id: string) {
-    return this.customers.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.customers.remove(id, user.userId);
   }
 }

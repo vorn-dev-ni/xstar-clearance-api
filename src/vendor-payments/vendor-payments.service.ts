@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { EntryLineType, Prisma, ReferenceType } from '@prisma/client';
+import {
+  AuditAction,
+  EntryLineType,
+  Prisma,
+  ReferenceType,
+} from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { ACCOUNT_CODES } from '../common/accounting.constants';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { JournalService } from '../journal/journal.service';
@@ -12,11 +18,12 @@ export class VendorPaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly journal: JournalService,
+    private readonly audit: AuditService,
   ) {}
 
   /** Pay a vendor and post DR Accounts Payable / CR Bank (clears the payable). */
   async create(dto: CreateVendorPaymentDto, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const payment = await this.prisma.$transaction(async (tx) => {
       const paymentNumber = await nextPaymentNumber(
         tx,
         new Date(dto.paymentDate),
@@ -74,6 +81,17 @@ export class VendorPaymentsService {
 
       return payment;
     });
+    await this.audit.log({
+      userId,
+      entityType: 'VendorPayment',
+      entityId: payment.id,
+      action: AuditAction.CREATE,
+      after: {
+        paymentNumber: payment.paymentNumber,
+        amount: Number(payment.amount),
+      },
+    });
+    return payment;
   }
 
   async findAll(query: ListVendorPaymentsDto) {

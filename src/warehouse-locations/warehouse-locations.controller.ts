@@ -17,13 +17,13 @@ import { WarehouseLocationsService } from './warehouse-locations.service';
 
 @ApiTags('warehouse-locations')
 @ApiBearerAuth()
-@RequirePermission('settings.view')
+@RequirePermission('operation.view')
 @Controller('warehouse-locations')
 export class WarehouseLocationsController {
   constructor(private readonly warehouseLocations: WarehouseLocationsService) {}
 
   @Post()
-  @RequirePermission('settings.edit')
+  @RequirePermission('operation.edit')
   create(@Body() dto: CreateWarehouseLocationDto) {
     return this.warehouseLocations.create(dto);
   }
@@ -39,13 +39,13 @@ export class WarehouseLocationsController {
   }
 
   @Patch(':id')
-  @RequirePermission('settings.edit')
+  @RequirePermission('operation.edit')
   update(@Param('id') id: string, @Body() dto: UpdateWarehouseLocationDto) {
     return this.warehouseLocations.update(id, dto);
   }
 
   @Delete(':id')
-  @RequirePermission('settings.edit')
+  @RequirePermission('operation.edit')
   remove(@Param('id') id: string) {
     return this.warehouseLocations.remove(id);
   }

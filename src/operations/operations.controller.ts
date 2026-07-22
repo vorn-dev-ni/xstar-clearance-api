@@ -57,7 +57,11 @@ export class OperationsController {
 
   @Patch(':id')
   @RequirePermission('operation.edit')
-  update(@Param('id') id: string, @Body() dto: UpdateClearanceJobDto) {
-    return this.operations.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateClearanceJobDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.operations.update(id, dto, user.userId);
   }
 }
