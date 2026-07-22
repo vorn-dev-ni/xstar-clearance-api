@@ -15,8 +15,11 @@ export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateSupplierDto) {
+    const code = dto.code || `SUP-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     try {
-      return await this.prisma.supplier.create({ data: dto });
+      return await this.prisma.supplier.create({
+        data: { ...dto, code },
+      });
     } catch (e) {
       throw this.mapUniqueError(e);
     }
