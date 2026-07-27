@@ -10,7 +10,7 @@ export class ListCustomersDto extends PaginationQueryDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiPropertyOptional({ description: 'Search by name/code/taxId' })
+  @ApiPropertyOptional({ description: 'Search by customer ID / name' })
   @IsOptional()
   @IsString()
   search?: string;

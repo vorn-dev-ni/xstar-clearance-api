@@ -8,10 +8,13 @@ import {
 } from 'class-validator';
 
 export class CreateCustomerDto {
-  @ApiPropertyOptional({ example: '027-01-26' })
+  @ApiPropertyOptional({
+    example: '027-01-26',
+    description: 'Human-readable customer ID; auto-generated if omitted',
+  })
   @IsOptional()
   @IsString()
-  code?: string;
+  customerId?: string;
 
   @ApiProperty()
   @IsString()

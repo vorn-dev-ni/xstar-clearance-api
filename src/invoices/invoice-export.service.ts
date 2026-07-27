@@ -271,7 +271,7 @@ export class InvoiceExportService {
   ): void {
     const c = invoice.customer;
     const rows: Array<[string, string, string]> = [
-      [KH.customer, 'Customer', c.code ?? ''],
+      [KH.customer, 'Customer', c.customerId ?? ''],
       [KH.name, 'Name', c.nameEn],
       [KH.address, 'Address', c.address ?? ''],
       [KH.telephone, 'Telephone N°', c.phone ?? ''],

@@ -33,6 +33,12 @@ model IncomeRecord {
   account   Account           @relation(fields: [accountId], references: [id])
   status    TransactionStatus @default(PENDING)
 
+  // Manual approval flow (operators approve/reject in-form; admin need not be present)
+  approvalStatus  ApprovalStatus @default(PENDING)
+  approvedBy      String?
+  approvalDate    DateTime?
+  rejectionReason String?
+
   // Details
   containerCount Int? // For shipping
   quantity       Int?
@@ -60,6 +66,7 @@ model IncomeRecord {
   @@index([recordDate])
   @@index([serviceType])
   @@index([status])
+  @@index([approvalStatus])
 }
 
 enum ServiceType {

@@ -4,7 +4,7 @@
 
 model Customer {
   id            String  @id @default(cuid())
-  code          String  @unique // e.g., 027-01-26
+  customerId    String  @unique // human-readable customer identifier, e.g., 027-01-26
   nameEn        String
   nameKh        String?
   nameCn        String?
@@ -39,5 +39,5 @@ model Customer {
   clearanceJobs   ClearanceJob[]
 
 
-  @@index([code])
+  @@index([customerId])
 }

@@ -43,14 +43,14 @@ export class CustomersService {
   }
 
   async create(dto: CreateCustomerDto, userId: string) {
-    const code =
-      dto.code ||
+    const customerId =
+      dto.customerId ||
       `CUST-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     try {
       const customer = await this.prisma.customer.create({
         data: {
           ...dto,
-          code,
+          customerId,
           registrationDate: new Date(dto.registrationDate),
         },
       });
@@ -74,7 +74,7 @@ export class CustomersService {
         ? {
             OR: [
               { nameEn: { contains: query.search, mode: 'insensitive' } },
-              { code: { contains: query.search, mode: 'insensitive' } },
+              { customerId: { contains: query.search, mode: 'insensitive' } },
             ],
           }
         : {}),
@@ -158,7 +158,7 @@ export class CustomersService {
       e instanceof Prisma.PrismaClientKnownRequestError &&
       e.code === 'P2002'
     ) {
-      return new ConflictException('A customer with this code already exists');
+      return new ConflictException('A customer with this ID already exists');
     }
     return e;
   }
