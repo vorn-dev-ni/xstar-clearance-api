@@ -103,11 +103,7 @@ export class BondedWarehouseExcelService {
       const rec = it as unknown as Record<string, unknown>;
       detail.addRow(
         STOCK_DETAIL_COLUMNS.map((c) =>
-          c.compute
-            ? c.compute(rec)
-            : c.field
-              ? (rec[c.field] ?? null)
-              : null,
+          c.compute ? c.compute(rec) : c.field ? (rec[c.field] ?? null) : null,
         ),
       );
     }
@@ -233,7 +229,10 @@ function daysInWarehouse(item: Record<string, unknown>): number | null {
   if (Number.isNaN(start.getTime())) return null;
   const outbound = item.outboundDate as Date | string | null | undefined;
   const end = outbound ? new Date(outbound) : new Date();
-  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86_400_000));
+  return Math.max(
+    0,
+    Math.floor((end.getTime() - start.getTime()) / 86_400_000),
+  );
 }
 
 function normalize(s: string): string {

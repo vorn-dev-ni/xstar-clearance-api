@@ -24,8 +24,12 @@ function makePrisma(items: unknown[] = []) {
     ),
   };
   const warehouseLocation = {
-    findUnique: jest.fn().mockResolvedValue({ id: 'loc_released', name: 'RELEASED' }),
-    create: jest.fn().mockResolvedValue({ id: 'loc_released', name: 'RELEASED' }),
+    findUnique: jest
+      .fn()
+      .mockResolvedValue({ id: 'loc_released', name: 'RELEASED' }),
+    create: jest
+      .fn()
+      .mockResolvedValue({ id: 'loc_released', name: 'RELEASED' }),
   };
   const prisma = {
     bondedWarehouseItem,
@@ -192,7 +196,10 @@ describe('BondedWarehouseService', () => {
       {
         blNumber: 'BLX',
         header: { importerName: 'ACME', validDays: 180 },
-        items: [{ blNumber: 'ignored', vin: 'V1' }, { blNumber: 'ignored', vin: 'V2' }],
+        items: [
+          { blNumber: 'ignored', vin: 'V1' },
+          { blNumber: 'ignored', vin: 'V2' },
+        ],
       },
       'user_1',
     );

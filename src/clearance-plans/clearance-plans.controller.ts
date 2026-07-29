@@ -19,6 +19,7 @@ import { CreateClearancePlanDto } from './dto/create-clearance-plan.dto';
 import { ExportClearancePlansDto } from './dto/export-clearance-plans.dto';
 import { ListClearancePlansDto } from './dto/list-clearance-plans.dto';
 import { UpdateClearancePlanDto } from './dto/update-clearance-plan.dto';
+import { UpdateClearancePlanStatusDto } from './dto/update-clearance-plan-status.dto';
 import { ClearancePlansExportService } from './clearance-plans-export.service';
 import { ClearancePlansService } from './clearance-plans.service';
 
@@ -80,6 +81,16 @@ export class ClearancePlansController {
   @RequirePermission('operation.edit')
   update(@Param('id') id: string, @Body() dto: UpdateClearancePlanDto) {
     return this.plans.update(id, dto);
+  }
+
+  @Patch(':id/status')
+  @RequirePermission('operation.action')
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateClearancePlanStatusDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.plans.updateStatus(id, dto.status, user.userId);
   }
 
   @Delete(':id')

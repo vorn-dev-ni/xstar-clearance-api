@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AuditAction, ClearancePlanStatus, Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { CreateClearancePlanDto } from './dto/create-clearance-plan.dto';
@@ -14,9 +16,21 @@ const planInclude = {
   clearanceJob: { select: { jobNumber: true, blBookingNumber: true } },
 } satisfies Prisma.ClearancePlanInclude;
 
+/** Ordered clearance lifecycle. Status may only move ±1 step; the last is terminal. */
+const CLEARANCE_PLAN_LIFECYCLE: ClearancePlanStatus[] = [
+  ClearancePlanStatus.TRANSIT_DOCS_APPROVED,
+  ClearancePlanStatus.CONTAINER_ARRIVED_DRY_PORT,
+  ClearancePlanStatus.CUSTOMS_VALUATION_APPROVED,
+  ClearancePlanStatus.CLEARANCE_IN_PROGRESS,
+  ClearancePlanStatus.CLEARANCE_COMPLETED,
+];
+
 @Injectable()
 export class ClearancePlansService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** The linked Shipment must exist — its BL is the plan row's Bill of Loading. */
   private async assertJob(clearanceJobId: string) {
@@ -134,6 +148,41 @@ export class ClearancePlansService {
       },
       include: planInclude,
     });
+  }
+
+  /**
+   * Advance a clearance plan through its lifecycle one step at a time. Once it
+   * reaches CLEARANCE_COMPLETED the plan is locked and can no longer move.
+   */
+  async updateStatus(id: string, status: ClearancePlanStatus, userId: string) {
+    const plan = await this.prisma.clearancePlan.findUnique({ where: { id } });
+    if (!plan) throw new NotFoundException('Clearance plan not found');
+
+    // Completed is terminal — fully locked once reached.
+    if (plan.status === ClearancePlanStatus.CLEARANCE_COMPLETED) {
+      throw new ConflictException('Completed clearance plans are locked');
+    }
+    // Only single-step moves (forward or back); no skipping.
+    const from = CLEARANCE_PLAN_LIFECYCLE.indexOf(plan.status);
+    const to = CLEARANCE_PLAN_LIFECYCLE.indexOf(status);
+    if (to < 0 || Math.abs(to - from) !== 1) {
+      throw new ConflictException('Status can only move one step at a time');
+    }
+
+    const updated = await this.prisma.clearancePlan.update({
+      where: { id },
+      data: { status },
+      include: planInclude,
+    });
+    await this.audit.log({
+      userId,
+      entityType: 'ClearancePlan',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      before: { status: plan.status },
+      after: { status: updated.status },
+    });
+    return updated;
   }
 
   async remove(id: string) {

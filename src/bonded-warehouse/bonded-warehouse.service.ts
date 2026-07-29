@@ -44,7 +44,10 @@ export class BondedWarehouseService {
     const quantity = dto.quantity ?? 1;
     // The shipment is the source of truth for the B/L: when linked to a job,
     // use the job's B/L rather than any client-supplied value.
-    const blNumber = await this.resolveBlNumber(dto.clearanceJobId, dto.blNumber);
+    const blNumber = await this.resolveBlNumber(
+      dto.clearanceJobId,
+      dto.blNumber,
+    );
     const item = await this.prisma.bondedWarehouseItem.create({
       data: {
         ...toItemData(dto),
@@ -247,7 +250,10 @@ export class BondedWarehouseService {
   async createShipment(dto: CreateShipmentDto, userId: string) {
     const header = toItemData(dto.header);
     // The shipment (job) is authoritative for the B/L when one is linked.
-    const blNumber = await this.resolveBlNumber(dto.clearanceJobId, dto.blNumber);
+    const blNumber = await this.resolveBlNumber(
+      dto.clearanceJobId,
+      dto.blNumber,
+    );
     const created = await this.prisma.$transaction(
       dto.items.map((item) => {
         const quantity = item.quantity ?? 1;
@@ -365,7 +371,11 @@ export class BondedWarehouseService {
 type ItemDataInput = Partial<
   Pick<
     CreateBondedItemDto,
-    'receivedDateKwb' | 'outboundDate' | 'etaDate' | 'transitDate' | 'inboundDate'
+    | 'receivedDateKwb'
+    | 'outboundDate'
+    | 'etaDate'
+    | 'transitDate'
+    | 'inboundDate'
   >
 > &
   Record<string, unknown>;

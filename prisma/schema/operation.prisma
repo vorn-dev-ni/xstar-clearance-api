@@ -190,10 +190,22 @@ model ClearancePlan {
   port           String? // e.g. TEC
   clearanceDate  DateTime?
   notes          String?
+  status         ClearancePlanStatus @default(TRANSIT_DOCS_APPROVED)
   createdBy      String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   @@index([clearanceJobId])
   @@index([clearanceDate])
+  @@index([status])
+}
+
+/// Step-by-step clearance lifecycle for a ClearancePlan container row. Advances
+/// one step at a time; CLEARANCE_COMPLETED is terminal (locked once reached).
+enum ClearancePlanStatus {
+  TRANSIT_DOCS_APPROVED
+  CONTAINER_ARRIVED_DRY_PORT
+  CUSTOMS_VALUATION_APPROVED
+  CLEARANCE_IN_PROGRESS
+  CLEARANCE_COMPLETED
 }
