@@ -703,6 +703,15 @@ export class InvoiceExportService {
 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.readFile(path.join(TEMPLATES_DIR, layout.file));
+
+    // The templates were extracted from a larger workbook and still carry
+    // defined names that point at external workbooks (e.g. '[2]020-112017'!$B$1,
+    // '[5]Data'!...) with no backing xl/externalLinks part. ExcelJS re-serializes
+    // them verbatim, which makes Excel report corrupt content and open the export
+    // read-only. None of these names are used by the output, so clear them.
+    // (Print_Area is stored on the worksheet page setup, not here, so it is kept.)
+    wb.definedNames.model = [];
+
     const ws = wb.worksheets[0];
 
     // Header + customer block (all above the item band, so never shifted).
