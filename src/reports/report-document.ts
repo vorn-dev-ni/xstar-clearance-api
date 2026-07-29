@@ -65,7 +65,9 @@ const CURRENCY_SYMBOL: Record<string, string> = {
 };
 
 export function currencySymbol(currency: string): string {
-  return CURRENCY_SYMBOL[currency] ?? `${currency} `;
+  const code = (currency ?? '').trim().toUpperCase();
+  if (!code) return CURRENCY_SYMBOL.USD;
+  return CURRENCY_SYMBOL[code] ?? `${code} `;
 }
 
 export function formatValue(
