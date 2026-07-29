@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ClearanceType, JobStatus } from '@prisma/client';
+import { ClearanceType, JobStatus, ShipmentType } from '@prisma/client';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
@@ -18,6 +18,11 @@ export class ListClearanceJobsDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(ClearanceType)
   clearanceType?: ClearanceType;
+
+  @ApiPropertyOptional({ enum: ShipmentType })
+  @IsOptional()
+  @IsEnum(ShipmentType)
+  shipmentType?: ShipmentType;
 
   @ApiPropertyOptional()
   @IsOptional()

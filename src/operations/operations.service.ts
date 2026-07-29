@@ -96,6 +96,7 @@ export class OperationsService {
       customerId: query.customerId,
       status: query.status,
       clearanceType: query.clearanceType,
+      shipmentType: query.shipmentType,
       shipmentStatus: query.shipmentStatus,
       ...(query.search
         ? {

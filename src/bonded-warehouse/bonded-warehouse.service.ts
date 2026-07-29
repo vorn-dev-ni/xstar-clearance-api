@@ -42,10 +42,13 @@ export class BondedWarehouseService {
 
   async create(dto: CreateBondedItemDto, userId: string) {
     const quantity = dto.quantity ?? 1;
+    // The shipment is the source of truth for the B/L: when linked to a job,
+    // use the job's B/L rather than any client-supplied value.
+    const blNumber = await this.resolveBlNumber(dto.clearanceJobId, dto.blNumber);
     const item = await this.prisma.bondedWarehouseItem.create({
       data: {
         ...toItemData(dto),
-        blNumber: dto.blNumber,
+        blNumber,
         quantity,
         releasedQty: 0,
         stockBalance: quantity,
@@ -243,6 +246,8 @@ export class BondedWarehouseService {
    */
   async createShipment(dto: CreateShipmentDto, userId: string) {
     const header = toItemData(dto.header);
+    // The shipment (job) is authoritative for the B/L when one is linked.
+    const blNumber = await this.resolveBlNumber(dto.clearanceJobId, dto.blNumber);
     const created = await this.prisma.$transaction(
       dto.items.map((item) => {
         const quantity = item.quantity ?? 1;
@@ -250,7 +255,7 @@ export class BondedWarehouseService {
           data: {
             ...header,
             ...toItemData(item),
-            blNumber: dto.blNumber,
+            blNumber,
             clearanceJobId: dto.clearanceJobId ?? item.clearanceJobId ?? null,
             quantity,
             releasedQty: 0,
@@ -263,11 +268,28 @@ export class BondedWarehouseService {
     await this.audit.log({
       userId,
       entityType: 'BondedShipment',
-      entityId: dto.blNumber,
+      entityId: blNumber,
       action: AuditAction.CREATE,
-      after: { blNumber: dto.blNumber, items: created.length },
+      after: { blNumber, items: created.length },
     });
-    return { blNumber: dto.blNumber, created: created.length, items: created };
+    return { blNumber, created: created.length, items: created };
+  }
+
+  /**
+   * The linked shipment is the source of truth for a bonded item's B/L. When a
+   * `clearanceJobId` is given, return that job's `blBookingNumber`; otherwise
+   * fall back to the supplied value.
+   */
+  private async resolveBlNumber(
+    clearanceJobId: string | undefined,
+    fallback: string,
+  ): Promise<string> {
+    if (!clearanceJobId) return fallback;
+    const job = await this.prisma.clearanceJob.findUnique({
+      where: { id: clearanceJobId },
+      select: { blBookingNumber: true },
+    });
+    return job?.blBookingNumber || fallback;
   }
 
   /**
