@@ -30,7 +30,7 @@ export class ReportExportService {
     });
     return {
       companyName: company?.companyNameEn ?? DEFAULT_COMPANY_NAME,
-      currency: company?.currency ?? 'USD',
+      currency: company?.currency?.trim() || 'USD',
       ...buildReportDocument(slug, data),
     };
   }
@@ -51,7 +51,7 @@ export class ReportExportService {
     return {
       title: spec.title,
       companyName: company?.companyNameEn ?? DEFAULT_COMPANY_NAME,
-      currency: company?.currency ?? 'USD',
+      currency: company?.currency?.trim() || 'USD',
       periodLabel: spec.periodLabel,
       landscape: spec.landscape,
       sections: [

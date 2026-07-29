@@ -52,6 +52,7 @@ model ClearanceJob {
   containerType     ContainerType?
   shipmentMode      ShipmentMode?
   shipmentTaxStatus ShipmentTaxStatus?
+  shipmentType      ShipmentType       @default(EXCLUDE_BONDED)
   clearanceType     ClearanceType?
   packageCount      Int?
   netWeight         String?
@@ -138,6 +139,12 @@ enum ShipmentTaxStatus {
 enum ClearanceType {
   NORMAL_CLEARANCE
   LAMSAM_CLEARANCE
+}
+
+/// Whether the shipment carries bonded-warehouse goods. Gates the Bonded Items tab.
+enum ShipmentType {
+  INCLUDE_BONDED
+  EXCLUDE_BONDED
 }
 
 /// Inline product/service rows on a bill (clearance job). Lightweight — not
