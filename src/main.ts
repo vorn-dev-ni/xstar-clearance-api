@@ -111,7 +111,7 @@ async function bootstrap() {
 
   // OpenAPI docs at /docs.
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('System X-Star API')
+    .setTitle('ST star cc API')
     .setDescription('Clearance operations, accounting & invoicing API')
     .setVersion('1.0')
     .addBearerAuth()

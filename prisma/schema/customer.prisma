@@ -4,10 +4,11 @@
 
 model Customer {
   id            String  @id @default(cuid())
-  code          String  @unique // e.g., 027-01-26
+  customerId    String  @unique // human-readable customer identifier, e.g., 027-01-26
   nameEn        String
   nameKh        String?
   nameCn        String?
+  taxId         String? @unique // TIN (tax identification number)
   address       String
   commune       String?
   district      String?
@@ -24,6 +25,8 @@ model Customer {
   notes         String?
 
   location               String? // free-text location (optional)
+  patentNo               String? // manual patent / registration number
+  patentExpiryDate       DateTime? // patent expiry date
   registrationDate       DateTime? // when the client was registered in the system (contract may predate)
   remark                 String? // editable anytime; required whenever isActive flips
   representativeImageUrl String? // direct link to profile/representative image
@@ -39,5 +42,5 @@ model Customer {
   clearanceJobs   ClearanceJob[]
 
 
-  @@index([code])
+  @@index([customerId])
 }

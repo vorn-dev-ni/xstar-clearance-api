@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
+  ApprovalStatus,
   AuditAction,
   EntryLineType,
   Prisma,
@@ -28,7 +30,16 @@ export class IncomeService {
     private readonly audit: AuditService,
   ) {}
 
+  /** Validate the serviceType code exists and is active (accounting-managed config). */
+  private async assertServiceType(code: string) {
+    const type = await this.prisma.serviceType.findUnique({ where: { code } });
+    if (!type || !type.isActive) {
+      throw new BadRequestException('Invalid or inactive service type');
+    }
+  }
+
   async create(dto: CreateIncomeDto, userId: string) {
+    await this.assertServiceType(dto.serviceType);
     const record = await this.prisma.$transaction(async (tx) => {
       const recordNumber = await nextNumber(
         tx,
@@ -154,11 +165,14 @@ export class IncomeService {
         'Posted income records cannot be edited',
       );
     }
+    if (dto.serviceType) await this.assertServiceType(dto.serviceType);
     const updated = await this.prisma.incomeRecord.update({
       where: { id },
       data: {
         ...dto,
         recordDate: dto.recordDate ? new Date(dto.recordDate) : undefined,
+        // Editing sends the record back for approval.
+        approvalStatus: ApprovalStatus.PENDING,
         status: TransactionStatus.PENDING,
       },
     });
@@ -205,7 +219,13 @@ export class IncomeService {
 
       const updated = await tx.incomeRecord.update({
         where: { id },
-        data: { status: TransactionStatus.POSTED, recordedDate: new Date() },
+        data: {
+          approvalStatus: ApprovalStatus.APPROVED,
+          approvedBy: userId,
+          approvalDate: new Date(),
+          status: TransactionStatus.POSTED,
+          recordedDate: new Date(),
+        },
       });
       return { updated, entry };
     });
@@ -223,6 +243,37 @@ export class IncomeService {
       status: result.updated.status,
       journalEntryId: result.entry.id,
       approvedAt: result.updated.recordedDate,
+    };
+  }
+
+  /** Reject: mark REJECTED and keep PENDING so it stays editable/resubmittable. */
+  async reject(id: string, userId: string, rejectionReason?: string) {
+    const record = await this.findOne(id);
+    if (record.status === TransactionStatus.POSTED) {
+      throw new UnprocessableEntityException(
+        'Posted income records cannot be rejected',
+      );
+    }
+    const updated = await this.prisma.incomeRecord.update({
+      where: { id },
+      data: {
+        approvalStatus: ApprovalStatus.REJECTED,
+        rejectionReason,
+        status: TransactionStatus.PENDING,
+      },
+    });
+    await this.audit.log({
+      userId,
+      entityType: 'IncomeRecord',
+      entityId: id,
+      action: AuditAction.REJECT,
+      after: { approvalStatus: ApprovalStatus.REJECTED, rejectionReason },
+    });
+    return {
+      id: updated.id,
+      approvalStatus: updated.approvalStatus,
+      rejectionReason: updated.rejectionReason,
+      status: updated.status,
     };
   }
 }

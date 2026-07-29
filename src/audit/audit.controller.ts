@@ -18,6 +18,7 @@ export class AuditController {
     const { rows, total } = await this.audit.list({
       entityType: query.entityType,
       action: query.action,
+      search: query.search,
       skip,
       take,
     });

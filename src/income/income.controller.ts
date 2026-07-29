@@ -15,6 +15,7 @@ import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../permissions/require-permission.decorator';
 import { ExportFormat } from '../reports/dto/report-query.dto';
+import { RejectIncomeDto } from './dto/approval.dto';
 import { CreateIncomeDto } from './dto/create-income.dto';
 import { ExportIncomeDto } from './dto/export-income.dto';
 import { ListIncomeDto } from './dto/list-income.dto';
@@ -86,8 +87,19 @@ export class IncomeController {
 
   @Post(':id/approve')
   @HttpCode(200)
-  @RequirePermission('accounting.action')
+  @RequirePermission('accounting.edit')
   approve(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.income.approve(id, user.userId);
+  }
+
+  @Post(':id/reject')
+  @HttpCode(200)
+  @RequirePermission('accounting.edit')
+  reject(
+    @Param('id') id: string,
+    @Body() dto: RejectIncomeDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.income.reject(id, user.userId, dto.rejectionReason);
   }
 }

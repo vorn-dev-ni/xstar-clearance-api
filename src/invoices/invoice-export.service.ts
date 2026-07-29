@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CompanySettings, Prisma } from '@prisma/client';
+import { CompanySettings, InvoiceType, Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import { DEFAULT_COMPANY_NAME } from '../common/company.constants';
@@ -16,6 +16,104 @@ type InvoiceWithRelations = Prisma.InvoiceGetPayload<{
 const FONTS_DIR = path.join(__dirname, 'fonts');
 const KHMER_REGULAR = path.join(FONTS_DIR, 'Battambang-Regular.ttf');
 const KHMER_BOLD = path.join(FONTS_DIR, 'Battambang-Bold.ttf');
+
+// Cleaned single-sheet copies of the client's real spreadsheets. Filling these
+// (rather than rebuilding) is what makes the .xlsx match exactly: logo, Khmer
+// Battambang font, borders and $/៛ number formats all come from the template.
+const TEMPLATES_DIR = path.join(__dirname, 'templates');
+
+/** Cell map for one invoice template; rows below `firstItemRow` shift when
+ *  the pre-formatted item band overflows. */
+interface TemplateLayout {
+  file: string;
+  invoiceNo: string;
+  date: string;
+  custCode: string | null;
+  custName: string;
+  custAddr: string;
+  custVat: string;
+  firstItemRow: number;
+  templateItemRows: number;
+  totalRow: number;
+  vatRow: number | null;
+  grandRow: number;
+  rateRow: number;
+  rielRow: number;
+  depositRow: number;
+  amountRow: number;
+}
+
+const TAX_INVOICE_LAYOUT: TemplateLayout = {
+  file: 'tax-invoice.xlsx',
+  invoiceNo: 'V15',
+  date: 'V17',
+  custCode: 'C15',
+  custName: 'C16',
+  custAddr: 'C17',
+  custVat: 'C22',
+  firstItemRow: 27,
+  templateItemRows: 2,
+  totalRow: 29,
+  vatRow: 30,
+  grandRow: 31,
+  rateRow: 32,
+  rielRow: 33,
+  depositRow: 34,
+  amountRow: 35,
+};
+
+const DEBIT_NOTE_LAYOUT: TemplateLayout = {
+  file: 'debit-note.xlsx',
+  invoiceNo: 'V17',
+  date: 'V19',
+  custCode: null,
+  custName: 'C18',
+  custAddr: 'C19',
+  custVat: 'C24',
+  firstItemRow: 27,
+  templateItemRows: 1,
+  totalRow: 28,
+  vatRow: null,
+  grandRow: 29,
+  rateRow: 30,
+  rielRow: 31,
+  depositRow: 32,
+  amountRow: 33,
+};
+
+// Item-row merges to restore after inserting extra rows: Description B:J,
+// Qty K:N, Unit price O:R, Amount S:V, Remark W:AA.
+const ITEM_MERGE_GROUPS: ReadonlyArray<[string, string]> = [
+  ['B', 'J'],
+  ['K', 'N'],
+  ['O', 'R'],
+  ['S', 'V'],
+  ['W', 'AA'],
+];
+
+/** Shift a single cell address (e.g. "S31") down by `extra` rows when it sits
+ *  at or below `firstShiftedRow`; used to move the totals block after inserting
+ *  extra line-item rows. */
+const shiftMergeAddr = (
+  addr: string,
+  firstShiftedRow: number,
+  extra: number,
+): string => {
+  const m = /^([A-Z]+)(\d+)$/.exec(addr);
+  if (!m) return addr;
+  const row = Number(m[2]);
+  return `${m[1]}${row >= firstShiftedRow ? row + extra : row}`;
+};
+
+const shiftMergeRange = (
+  range: string,
+  firstShiftedRow: number,
+  extra: number,
+): string =>
+  range
+    .split(':')
+    .map((a) => shiftMergeAddr(a, firstShiftedRow, extra))
+    .join(':');
 
 /** Khmer labels for the bilingual invoice template. */
 const KH = {
@@ -271,7 +369,7 @@ export class InvoiceExportService {
   ): void {
     const c = invoice.customer;
     const rows: Array<[string, string, string]> = [
-      [KH.customer, 'Customer', c.code ?? ''],
+      [KH.customer, 'Customer', c.customerId ?? ''],
       [KH.name, 'Name', c.nameEn],
       [KH.address, 'Address', c.address ?? ''],
       [KH.telephone, 'Telephone N°', c.phone ?? ''],
@@ -576,6 +674,116 @@ export class InvoiceExportService {
         y,
         { width: 495, align: 'center' },
       );
+  }
+
+  /**
+   * Render a single invoice into the client's exact Excel template — Tax
+   * Invoice (with VAT) or Debit Note (no VAT). We load a copy of the real
+   * `.xlsx` and only overwrite data cells, so the logo, Khmer Battambang font,
+   * borders and $/៛ number formats are preserved verbatim.
+   */
+  async invoiceExcel(
+    invoiceId: string,
+  ): Promise<{ buffer: Buffer; invoiceNumber: string }> {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        lineItems: { orderBy: { itemNumber: 'asc' } },
+        customer: true,
+      },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    const company = await this.prisma.companySettings.findFirst();
+    const rate = Number(company?.khrExchangeRate ?? 4100);
+
+    const layout =
+      invoice.invoiceType === InvoiceType.DEBIT_NOTE
+        ? DEBIT_NOTE_LAYOUT
+        : TAX_INVOICE_LAYOUT;
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(path.join(TEMPLATES_DIR, layout.file));
+    const ws = wb.worksheets[0];
+
+    // Header + customer block (all above the item band, so never shifted).
+    ws.getCell(layout.invoiceNo).value = invoice.invoiceNumber;
+    ws.getCell(layout.date).value = day(invoice.invoiceDate).replace(/-/g, '.');
+    if (layout.custCode) {
+      ws.getCell(layout.custCode).value = invoice.customer.customerId;
+    }
+    ws.getCell(layout.custName).value = invoice.customer.nameEn;
+    ws.getCell(layout.custAddr).value = invoice.customer.address;
+    ws.getCell(layout.custVat).value =
+      invoice.taxIdNumber ?? invoice.customer.taxId ?? '';
+
+    // Line items: expand the pre-formatted band when there are more items than
+    // the template ships with. duplicateRow copies styles but not merges, so we
+    // restore the item-row merges afterwards.
+    const items = invoice.lineItems;
+    const fir = layout.firstItemRow;
+    const extra = Math.max(0, items.length - layout.templateItemRows);
+    if (extra > 0) {
+      // exceljs' duplicateRow does not shift merged cells correctly, so unmerge
+      // everything first, insert the rows, then re-apply each merge at its new
+      // position and merge the freshly inserted item rows.
+      const firstShiftedRow = fir + layout.templateItemRows;
+      const originalMerges = [...ws.model.merges];
+      for (const range of originalMerges) ws.unMergeCells(range);
+      ws.duplicateRow(fir, extra, true);
+      for (const range of originalMerges) {
+        ws.mergeCells(shiftMergeRange(range, firstShiftedRow, extra));
+      }
+      const lastItemRow = fir + items.length - 1;
+      for (let r = firstShiftedRow; r <= lastItemRow; r++) {
+        for (const [c1, c2] of ITEM_MERGE_GROUPS) {
+          if (!ws.getCell(`${c1}${r}`).isMerged) {
+            ws.mergeCells(`${c1}${r}:${c2}${r}`);
+          }
+        }
+      }
+    }
+    items.forEach((li, i) => {
+      const r = fir + i;
+      ws.getCell(`A${r}`).value = li.itemNumber;
+      ws.getCell(`B${r}`).value = li.description;
+      ws.getCell(`K${r}`).value = Number(li.quantity);
+      ws.getCell(`O${r}`).value = Number(li.unitPrice);
+      ws.getCell(`S${r}`).value = { formula: `K${r}*O${r}` };
+      if (li.notes) ws.getCell(`W${r}`).value = li.notes;
+    });
+
+    // Totals block — shifts down by `extra` once the item band overflows.
+    const shift = (row: number): number => row + extra;
+    const lastBandRow =
+      fir + Math.max(items.length, layout.templateItemRows) - 1;
+    const totalRow = shift(layout.totalRow);
+    ws.getCell(`S${totalRow}`).value = {
+      formula: `SUM(S${fir}:V${lastBandRow})`,
+    };
+
+    const grandRow = shift(layout.grandRow);
+    if (layout.vatRow !== null) {
+      const vatRow = shift(layout.vatRow);
+      const pct = Number(invoice.taxRate);
+      ws.getCell(`S${vatRow}`).value = { formula: `S${totalRow}*${pct}/100` };
+      ws.getCell(`S${grandRow}`).value = { formula: `S${totalRow}+S${vatRow}` };
+    } else {
+      ws.getCell(`S${grandRow}`).value = { formula: `S${totalRow}` };
+    }
+
+    const rateRow = shift(layout.rateRow);
+    ws.getCell(`P${rateRow}`).value = rate;
+    ws.getCell(`S${shift(layout.rielRow)}`).value = {
+      formula: `S${grandRow}*P${rateRow}`,
+    };
+    const depositRow = shift(layout.depositRow);
+    ws.getCell(`S${depositRow}`).value = Number(invoice.deposit);
+    ws.getCell(`S${shift(layout.amountRow)}`).value = {
+      formula: `S${grandRow}-S${depositRow}`,
+    };
+
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+    return { buffer, invoiceNumber: invoice.invoiceNumber };
   }
 
   /** Export a filtered invoice list as an Excel workbook. */

@@ -27,6 +27,7 @@ model Account {
   deposits           Deposit[]
   bankPayments       Payment[]          @relation("PaymentBankAccount")
   bankVendorPayments VendorPayment[]    @relation("VendorPaymentBankAccount")
+  bankReconciliations BankReconciliation[] @relation("BankReconciliationAccount")
 
   @@index([type])
   @@index([category])

@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ServiceType, TransactionStatus } from '@prisma/client';
+import { TransactionStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
@@ -32,10 +32,10 @@ export class ListIncomeDto extends PaginationQueryDto {
   @IsEnum(TransactionStatus)
   status?: TransactionStatus;
 
-  @ApiPropertyOptional({ enum: ServiceType })
+  @ApiPropertyOptional({ description: 'ServiceType.code' })
   @IsOptional()
-  @IsEnum(ServiceType)
-  serviceType?: ServiceType;
+  @IsString()
+  serviceType?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

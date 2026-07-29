@@ -8,14 +8,21 @@ import {
 } from 'class-validator';
 
 export class CreateCustomerDto {
-  @ApiPropertyOptional({ example: '027-01-26' })
+  @ApiPropertyOptional({
+    example: '027-01-26',
+    description: 'Human-readable customer ID; auto-generated if omitted',
+  })
   @IsOptional()
   @IsString()
-  code?: string;
+  customerId?: string;
 
   @ApiProperty()
   @IsString()
   nameEn!: string;
+
+  @ApiProperty({ description: 'TIN (tax identification number)' })
+  @IsString()
+  taxId!: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -95,6 +102,19 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @ApiPropertyOptional({ description: 'Manual patent / registration number' })
+  @IsOptional()
+  @IsString()
+  patentNo?: string;
+
+  @ApiPropertyOptional({
+    example: '2027-07-14',
+    description: 'Patent expiry date',
+  })
+  @IsOptional()
+  @IsISO8601()
+  patentExpiryDate?: string;
 
   @ApiProperty({
     example: '2026-07-14',

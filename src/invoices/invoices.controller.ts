@@ -75,16 +75,19 @@ export class InvoicesController {
     return this.invoices.findOne(id);
   }
 
-  @Get(':id/pdf')
-  async invoicePdf(
+  @Get(':id/xlsx')
+  async invoiceExcel(
     @Param('id') id: string,
     @Res() res: Response,
   ): Promise<void> {
-    const { buffer, invoiceNumber } = await this.exporter.invoicePdf(id);
-    res.setHeader('Content-Type', 'application/pdf');
+    const { buffer, invoiceNumber } = await this.exporter.invoiceExcel(id);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${invoiceNumber}.pdf"`,
+      `attachment; filename="${invoiceNumber}.xlsx"`,
     );
     res.send(buffer);
   }

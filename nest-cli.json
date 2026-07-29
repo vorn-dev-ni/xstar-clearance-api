@@ -4,7 +4,11 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": [{ "include": "invoices/fonts/*.ttf", "outDir": "dist" }],
+    "assets": [
+      { "include": "invoices/fonts/*.ttf", "outDir": "dist" },
+      { "include": "invoices/templates/*.xlsx", "outDir": "dist" },
+      { "include": "bank-reconciliation/templates/*.xlsx", "outDir": "dist" }
+    ],
     "watchAssets": true
   }
 }

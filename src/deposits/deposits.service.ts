@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   AuditAction,
   ContainerDepositStatus,
@@ -20,6 +24,15 @@ const depositInclude = {
   account: { select: { code: true, nameEn: true } },
   clearanceJob: { select: { jobNumber: true } },
 } satisfies Prisma.DepositInclude;
+
+/** Ordered container-deposit refund lifecycle. Status may only move ±1 step. */
+const DEPOSIT_LIFECYCLE: ContainerDepositStatus[] = [
+  ContainerDepositStatus.EIR_DOCS_COLLECTED,
+  ContainerDepositStatus.ORIGINAL_RECEIPT_COLLECTED,
+  ContainerDepositStatus.SUBMITTED_TO_SHIPPING_LINE,
+  ContainerDepositStatus.AWAITING_DEPOSIT_REFUND,
+  ContainerDepositStatus.DEPOSIT_REFUNDED,
+];
 
 @Injectable()
 export class DepositsService {
@@ -126,6 +139,18 @@ export class DepositsService {
   ) {
     const deposit = await this.prisma.deposit.findUnique({ where: { id } });
     if (!deposit) throw new NotFoundException('Deposit not found');
+
+    // Refunded is terminal — fully locked once reached.
+    if (deposit.status === ContainerDepositStatus.DEPOSIT_REFUNDED) {
+      throw new ConflictException('Refunded deposits are locked');
+    }
+    // Only single-step moves (forward or back); no skipping.
+    const from = DEPOSIT_LIFECYCLE.indexOf(deposit.status);
+    const to = DEPOSIT_LIFECYCLE.indexOf(status);
+    if (to < 0 || Math.abs(to - from) !== 1) {
+      throw new ConflictException('Status can only move one step at a time');
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const becomingRefunded =
         status === ContainerDepositStatus.DEPOSIT_REFUNDED &&

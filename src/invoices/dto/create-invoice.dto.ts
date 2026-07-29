@@ -88,6 +88,15 @@ export class CreateInvoiceDto {
   @Min(0)
   taxRate?: number;
 
+  @ApiPropertyOptional({
+    default: 0,
+    description: 'Deposit already collected; shown as the "/ Deposit" line',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  deposit?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

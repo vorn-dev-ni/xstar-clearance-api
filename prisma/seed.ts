@@ -388,7 +388,7 @@ async function main(): Promise<void> {
   // 6. Customers — key Cambodian importers & exporters across garments, electronics, agriculture, and construction.
   const CUSTOMERS = [
     {
-      code: '027-01-26',
+      customerId: '027-01-26',
       nameEn: 'Grand Lion Garment Factory Co., Ltd',
       nameKh: 'រោងចក្រកាត់ដេរ ហ្រ្គេន ឡាយអិន',
       nameCn: '大狮制衣（柬埔寨）有限公司',
@@ -405,7 +405,7 @@ async function main(): Promise<void> {
       notes: 'Major garment exporter to EU and USA under QIP tax-exempt status.',
     },
     {
-      code: '027-02-26',
+      customerId: '027-02-26',
       nameEn: 'Angkor Electronics Distribution Co., Ltd',
       nameKh: 'អង្គរ អេឡិកត្រូនិក ឌីស្រ្ទីប៊ីយូសិន',
       nameCn: '吴哥电子销售服务',
@@ -422,7 +422,7 @@ async function main(): Promise<void> {
       notes: 'Consumer electronics, home appliances, and solar inverter importer.',
     },
     {
-      code: '027-03-26',
+      customerId: '027-03-26',
       nameEn: 'Mekong Agriculture & Rice Export Corp.',
       nameKh: 'ក្រុមហ៊ុននាំចេញអង្ករ មេគង្គ',
       nameCn: '湄公河农业与大米出口集团',
@@ -439,7 +439,7 @@ async function main(): Promise<void> {
       notes: 'High-grade fragrant rice (Phka Rumduol) and agricultural commodities exporter.',
     },
     {
-      code: '027-04-26',
+      customerId: '027-04-26',
       nameEn: 'Phnom Penh Heavy Machinery & Construction Group',
       nameKh: 'ភ្នំពេញ គ្រឿងចក្រ និងសំណង់',
       nameCn: '金边重工与工程建设集团',
@@ -456,7 +456,7 @@ async function main(): Promise<void> {
       notes: 'Excavators, cranes, and heavy construction equipment imports for infrastructure projects.',
     },
     {
-      code: '027-05-26',
+      customerId: '027-05-26',
       nameEn: 'Royal Crown Beverage & Brewery Co., Ltd',
       nameKh: 'រ៉ូយ៉ាល់ ក្រោន បេវើរេជ និងប៊ីយែរ',
       nameCn: '皇家皇冠饮料与酿酒公司',
@@ -473,7 +473,7 @@ async function main(): Promise<void> {
       notes: 'Importing aluminum cans, packaging film, and brewery raw ingredients.',
     },
     {
-      code: '027-06-26',
+      customerId: '027-06-26',
       nameEn: 'Khmer Green Solar & Clean Energy Solutions',
       nameKh: 'ខ្មែរ ហ្គ្រីន សូឡា និងថាមពលស្អាត',
       nameCn: '高棉绿色光伏与清洁能源技术',
@@ -494,7 +494,7 @@ async function main(): Promise<void> {
   const customersMap: Record<string, string> = {};
   for (const c of CUSTOMERS) {
     const created = await prisma.customer.upsert({
-      where: { code: c.code },
+      where: { customerId: c.customerId },
       update: {
         nameEn: c.nameEn,
         nameKh: c.nameKh,
@@ -511,7 +511,7 @@ async function main(): Promise<void> {
       },
       create: c,
     });
-    customersMap[c.code] = created.id;
+    customersMap[c.customerId] = created.id;
   }
   console.log(`✅ Seeded ${CUSTOMERS.length} customers`);
 

@@ -52,6 +52,7 @@ model ClearanceJob {
   containerType     ContainerType?
   shipmentMode      ShipmentMode?
   shipmentTaxStatus ShipmentTaxStatus?
+  clearanceType     ClearanceType?
   packageCount      Int?
   netWeight         String?
   grossWeight       String?
@@ -80,6 +81,7 @@ model ClearanceJob {
   recordItems    BillRecordItem[]
   expenseItems   BillExpenseItem[]
   bondedItems    BondedWarehouseItem[]
+  clearancePlans ClearancePlan[]
 
   createdBy String
   createdAt DateTime @default(now())
@@ -128,10 +130,14 @@ enum ShipmentMode {
 
 /// Tax treatment of the shipment (from the covering-file "Shipment status" box).
 enum ShipmentTaxStatus {
-  DUTIABLE
-  TAX_EXEMPTION
   PAY_VAT
-  TAX_DEPOSIT
+  DEBIT_NOTE_ONLY
+}
+
+/// Customs clearance regime for the shipment (required on new shipments).
+enum ClearanceType {
+  NORMAL_CLEARANCE
+  LAMSAM_CLEARANCE
 }
 
 /// Inline product/service rows on a bill (clearance job). Lightweight — not
@@ -157,6 +163,30 @@ model BillExpenseItem {
   itemNumber     Int
   description    String
   amount         Decimal      @db.Decimal(15, 2)
+  invoiceNumber  String? // optional Invoice/CM # reference
 
   @@index([clearanceJobId])
+}
+
+/// Clearance-plan container row (the "CLEARANCE PLANS" sheet). Each row is one
+/// container linked to a Shipment (ClearanceJob) — the Bill of Loading is the
+/// linked job's blBookingNumber.
+model ClearancePlan {
+  id             String       @id @default(cuid())
+  clearanceJobId String
+  clearanceJob   ClearanceJob @relation(fields: [clearanceJobId], references: [id])
+  consignee      String?
+  container      String // container number (per-row key)
+  size           String? // e.g. 40'
+  seal           String?
+  commodity      String? // renamed from the sheet's "COMMUNITY"
+  port           String? // e.g. TEC
+  clearanceDate  DateTime?
+  notes          String?
+  createdBy      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([clearanceJobId])
+  @@index([clearanceDate])
 }

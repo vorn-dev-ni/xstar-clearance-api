@@ -6,15 +6,19 @@ import { AppService } from './app.service';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { BankReconciliationModule } from './bank-reconciliation/bank-reconciliation.module';
 import { BondedWarehouseModule } from './bonded-warehouse/bonded-warehouse.module';
 import { CommonModule } from './common/common.module';
 import { CostingModule } from './costing/costing.module';
 import { validate, type Env } from './config/env.validation';
+import { ClearancePlansModule } from './clearance-plans/clearance-plans.module';
 import { CustomersModule } from './customers/customers.module';
 import { DepositsModule } from './deposits/deposits.module';
 import { ExpenseModule } from './expense/expense.module';
+import { ExpenseTypesModule } from './expense-types/expense-types.module';
 import { HealthModule } from './health/health.module';
 import { IncomeModule } from './income/income.module';
+import { ServiceTypesModule } from './service-types/service-types.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { JournalModule } from './journal/journal.module';
 import { OperationsModule } from './operations/operations.module';
@@ -60,6 +64,7 @@ import { WarehouseLocationsModule } from './warehouse-locations/warehouse-locati
     IncomeModule,
     ExpenseModule,
     InvoicesModule,
+    BankReconciliationModule,
     ReportsModule,
     TaxModule,
     AuditModule,
@@ -73,6 +78,9 @@ import { WarehouseLocationsModule } from './warehouse-locations/warehouse-locati
     CostingModule,
     BondedWarehouseModule,
     WarehouseLocationsModule,
+    ServiceTypesModule,
+    ExpenseTypesModule,
+    ClearancePlansModule,
   ],
   controllers: [AppController],
   providers: [AppService],

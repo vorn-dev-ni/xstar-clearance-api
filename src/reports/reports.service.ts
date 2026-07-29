@@ -3,7 +3,6 @@ import {
   AccountType,
   EntryLineType,
   EntryStatus,
-  ExpenseType,
   TransactionStatus,
 } from '@prisma/client';
 import { monthYearRange } from '../common/date-range';
@@ -210,13 +209,13 @@ export class ReportsService {
         _sum: { taxAmount: true },
       }),
       this.prisma.expenseRecord.aggregate({
-        where: { recordDate: range, expenseType: ExpenseType.WITHHOLDING_TAX },
+        where: { recordDate: range, expenseType: 'WITHHOLDING_TAX' },
         _sum: { amount: true },
       }),
       this.prisma.expenseRecord.aggregate({
         where: {
           recordDate: range,
-          expenseType: ExpenseType.NSSF_CONTRIBUTION,
+          expenseType: 'NSSF_CONTRIBUTION',
         },
         _sum: { amount: true },
       }),

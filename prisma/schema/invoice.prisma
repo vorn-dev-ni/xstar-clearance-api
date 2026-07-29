@@ -24,6 +24,9 @@ model Invoice {
   paidAmount  Decimal @default(0) @db.Decimal(15, 2)
   balanceDue  Decimal @db.Decimal(15, 2)
   currency    String  @default("USD")
+  // Deposit already collected; shown on the invoice/debit-note template as the
+  // "/ Deposit" line, so "Amount to be Paid" = grand total − deposit.
+  deposit     Decimal @default(0) @db.Decimal(15, 2)
 
   // Details
   description String?

@@ -5,6 +5,7 @@ import { DEFAULT_COMPANY_NAME } from '../common/company.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildReportDocument } from './report-builders';
 import {
+  currencySymbol,
   formatValue,
   type ReportColumnSpec,
   type ReportDocument,
@@ -41,6 +42,8 @@ export class ReportExportService {
     columns: ReportColumnSpec[];
     rows: Record<string, unknown>[];
     totalRow?: Record<string, unknown>;
+    /** Render the PDF landscape (for wide tables). */
+    landscape?: boolean;
   }): Promise<ReportDocument> {
     const company = await this.prisma.companySettings.findFirst({
       select: { companyNameEn: true, currency: true },
@@ -50,6 +53,7 @@ export class ReportExportService {
       companyName: company?.companyNameEn ?? DEFAULT_COMPANY_NAME,
       currency: company?.currency ?? 'USD',
       periodLabel: spec.periodLabel,
+      landscape: spec.landscape,
       sections: [
         {
           kind: 'table',
@@ -62,7 +66,11 @@ export class ReportExportService {
   }
 
   async toPdf(report: ReportDocument): Promise<Buffer> {
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const doc = new PDFDocument({
+      margin: 50,
+      size: 'A4',
+      layout: report.landscape ? 'landscape' : 'portrait',
+    });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     const done = new Promise<Buffer>((resolve) => {
@@ -155,8 +163,10 @@ export class ReportExportService {
     totalRow: Record<string, unknown> | undefined,
     currency: string,
   ): void {
-    // Distribute the printable width proportionally to Excel widths.
-    const totalWidth = PAGE_RIGHT - PAGE_LEFT;
+    // Distribute the printable width proportionally to Excel widths. Derive the
+    // right edge from the actual page (so landscape uses the full width).
+    const pageRight = doc.page.width - PAGE_LEFT;
+    const totalWidth = pageRight - PAGE_LEFT;
     const weight = columns.reduce((acc, c) => acc + (c.width ?? 15), 0);
     const widths = columns.map((c) => ((c.width ?? 15) / weight) * totalWidth);
     const xs = widths.reduce<number[]>(
@@ -185,7 +195,7 @@ export class ReportExportService {
 
     header();
     for (const row of rows) {
-      if (doc.y > 760) {
+      if (doc.y > doc.page.height - 80) {
         doc.addPage();
         doc.y = 50;
         header();
@@ -207,7 +217,7 @@ export class ReportExportService {
       const y = doc.y;
       doc
         .moveTo(PAGE_LEFT, y - 2)
-        .lineTo(PAGE_RIGHT, y - 2)
+        .lineTo(pageRight, y - 2)
         .strokeColor('#999')
         .stroke();
       doc.fontSize(8).font('Helvetica-Bold');
@@ -247,7 +257,11 @@ export class ReportExportService {
             `${'    '.repeat(row.indent ?? 0)}${row.label}`,
             row.value,
           ]);
-          r.getCell(2).numFmt = this.numFmt(row.format, row.value);
+          r.getCell(2).numFmt = this.numFmt(
+            row.format,
+            row.value,
+            report.currency,
+          );
           if (row.bold) {
             r.font = { bold: true };
             r.getCell(1).border = { top: { style: 'thin' } };
@@ -269,7 +283,11 @@ export class ReportExportService {
         for (const row of section.rows) {
           const r = sheet.addRow(section.columns.map((c) => row[c.key] ?? ''));
           section.columns.forEach((c, i) => {
-            r.getCell(i + 1).numFmt = this.numFmt(c.format, row[c.key]);
+            r.getCell(i + 1).numFmt = this.numFmt(
+              c.format,
+              row[c.key],
+              report.currency,
+            );
           });
         }
         if (section.totalRow) {
@@ -279,7 +297,11 @@ export class ReportExportService {
           );
           r.font = { bold: true };
           section.columns.forEach((c, i) => {
-            r.getCell(i + 1).numFmt = this.numFmt(c.format, total[c.key]);
+            r.getCell(i + 1).numFmt = this.numFmt(
+              c.format,
+              total[c.key],
+              report.currency,
+            );
             r.getCell(i + 1).border = { top: { style: 'thin' } };
           });
         }
@@ -308,11 +330,16 @@ export class ReportExportService {
     }
   }
 
-  private numFmt(format: ValueFormat | undefined, value: unknown): string {
+  private numFmt(
+    format: ValueFormat | undefined,
+    value: unknown,
+    currency: string,
+  ): string {
     if (typeof value !== 'number') return '@';
     switch (format ?? 'currency') {
       case 'currency':
-        return '#,##0.00';
+        // Embed the currency symbol as a literal, e.g. "$"#,##0.00.
+        return `"${currencySymbol(currency)}"#,##0.00`;
       case 'percent':
         return '0.0"%"';
       case 'number':

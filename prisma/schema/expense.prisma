@@ -7,7 +7,7 @@ model ExpenseRecord {
   recordNumber String      @unique
   recordDate   DateTime
   description  String // Expense description
-  expenseType  ExpenseType
+  expenseType  String // references ExpenseType.code (accounting-managed config)
 
   // Supplier info
   supplierId   String?
@@ -69,22 +69,16 @@ model ExpenseRecord {
   @@index([approvalStatus])
 }
 
-enum ExpenseType {
-  TECHNICAL_OPERATIONS
-  DEPOSITS_PAID
-  HOSPITALITY
-  RENTAL
-  CAR_RENTAL
-  OFFICE_SUPPLIES
-  CLEANING_SUPPLIES
-  INTERNET
-  UTILITIES
-  NSSF_CONTRIBUTION
-  TAX_PAYMENT
-  WITHHOLDING_TAX
-  BANK_CHARGES
-  MAINTENANCE
-  OTHER
+/// Accounting-managed expense types (CRUD). `code` is stored on
+/// ExpenseRecord.expenseType; `name` is the editable display label.
+model ExpenseType {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum ApprovalStatus {

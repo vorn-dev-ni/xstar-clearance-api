@@ -27,6 +27,7 @@ model User {
   vendorPayments        VendorPayment[]
   journalEntries        JournalEntry[]
   financialReports      FinancialReport[]
+  bankReconciliations   BankReconciliation[]
   assignedClearanceJobs ClearanceJob[]    @relation("JobAssignedStaff")
 
   @@index([email])

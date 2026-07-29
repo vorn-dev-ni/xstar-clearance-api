@@ -90,7 +90,7 @@ export class ExpenseController {
 
   @Post(':id/approve')
   @HttpCode(200)
-  @RequirePermission('accounting.action')
+  @RequirePermission('accounting.edit')
   approve(
     @Param('id') id: string,
     @Body() dto: ApproveExpenseDto,
@@ -101,7 +101,7 @@ export class ExpenseController {
 
   @Post(':id/reject')
   @HttpCode(200)
-  @RequirePermission('accounting.action')
+  @RequirePermission('accounting.edit')
   reject(
     @Param('id') id: string,
     @Body() dto: RejectExpenseDto,

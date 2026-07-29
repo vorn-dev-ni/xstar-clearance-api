@@ -13,4 +13,9 @@ export class ListAuditLogsDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(AuditAction)
   action?: AuditAction;
+
+  @ApiPropertyOptional({ example: 'sok@company.com' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
