@@ -10,6 +10,8 @@ interface ColumnSpec {
   header: string;
   field: FieldKey | null; // null = spacer / computed column (export only, ignored on import)
   type?: 'string' | 'int' | 'decimal' | 'date' | 'location';
+  aliases?: string[]; // legacy headers also accepted on import
+  compute?: (item: Record<string, unknown>) => ExcelJS.CellValue; // export-only computed value
 }
 
 /**
@@ -35,17 +37,24 @@ const STOCK_DETAIL_COLUMNS: ColumnSpec[] = [
   { header: 'ENGINE#', field: 'engineNumber' },
   { header: "QTY' (UNIT)", field: 'quantity', type: 'int' },
   { header: 'Gross Weight (KGS)', field: 'grossWeightKg', type: 'decimal' },
-  { header: 'Received Date In KWB', field: 'receivedDateKwb', type: 'date' },
+  {
+    header: 'Inbound Date',
+    field: 'receivedDateKwb',
+    type: 'date',
+    aliases: ['Received Date In KWB'],
+  },
+  { header: 'Outbound Date', field: 'outboundDate', type: 'date' },
   { header: 'TRANSFER/LOCATION UPDATE/OUTBOUND', field: null },
   { header: 'Current Location', field: 'currentLocationId', type: 'location' },
   { header: "Released QTY' (Unit)", field: 'releasedQty', type: 'int' },
   { header: 'Stock Balance (Unit)', field: 'stockBalance', type: 'int' },
+  { header: 'Days in Warehouse', field: null, compute: daysInWarehouse },
   { header: 'Valid Days', field: 'validDays', type: 'int' },
   { header: 'ETA DATE', field: 'etaDate', type: 'date' },
   { header: 'SAD ID (IM8)', field: 'sadIdIm8' },
   { header: 'Transit Date', field: 'transitDate', type: 'date' },
   { header: 'SAD ID (IM7)', field: 'sadIdIm7' },
-  { header: 'Inbound Date', field: 'inboundDate', type: 'date' },
+  { header: 'IM7 / Warehousing Date', field: 'inboundDate', type: 'date' },
   { header: 'Commodity Code', field: 'commodityCode' },
 ];
 
@@ -91,9 +100,14 @@ export class BondedWarehouseExcelService {
     detail.addRow(STOCK_DETAIL_COLUMNS.map((c) => c.header));
     detail.getRow(1).font = { bold: true };
     for (const it of items) {
+      const rec = it as unknown as Record<string, unknown>;
       detail.addRow(
         STOCK_DETAIL_COLUMNS.map((c) =>
-          c.field ? ((it as Record<string, unknown>)[c.field] ?? null) : null,
+          c.compute
+            ? c.compute(rec)
+            : c.field
+              ? (rec[c.field] ?? null)
+              : null,
         ),
       );
     }
@@ -148,9 +162,13 @@ export class BondedWarehouseExcelService {
     headerRow.eachCell((cell, colNumber) => {
       const norm = normalize(toStr(cell.value));
       const spec = STOCK_DETAIL_COLUMNS.find(
-        (c) => c.field && normalize(c.header) === norm,
+        (c) =>
+          c.field &&
+          (normalize(c.header) === norm ||
+            (c.aliases?.some((a) => normalize(a) === norm) ?? false)),
       );
-      if (spec?.field) colByField.set(spec.field, colNumber);
+      if (spec?.field && !colByField.has(spec.field))
+        colByField.set(spec.field, colNumber);
     });
     const blCol = colByField.get('blNumber');
     if (!blCol) {
@@ -202,6 +220,20 @@ export class BondedWarehouseExcelService {
     }
     return { created, skipped };
   }
+}
+
+/**
+ * Days a unit has sat in the warehouse: inbound date → outbound date, or → today
+ * while still in stock. Null when there is no inbound date.
+ */
+function daysInWarehouse(item: Record<string, unknown>): number | null {
+  const inbound = item.receivedDateKwb as Date | string | null | undefined;
+  if (!inbound) return null;
+  const start = new Date(inbound);
+  if (Number.isNaN(start.getTime())) return null;
+  const outbound = item.outboundDate as Date | string | null | undefined;
+  const end = outbound ? new Date(outbound) : new Date();
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86_400_000));
 }
 
 function normalize(s: string): string {

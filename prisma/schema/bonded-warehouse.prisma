@@ -42,7 +42,8 @@ model BondedWarehouseItem {
   grossWeightKg Decimal? @db.Decimal(15, 3)
 
   // Warehouse status & stock movement
-  receivedDateKwb   DateTime? // Received Date In KWB
+  receivedDateKwb   DateTime? // Inbound Date (physical transfer-in; drives day-count)
+  outboundDate      DateTime? // manual outbound / release-out date; also ends the day-count
   currentLocationId String?
   currentLocation   WarehouseLocation? @relation(fields: [currentLocationId], references: [id])
   releasedQty       Int                @default(0)

@@ -23,6 +23,7 @@ import { BondedWarehouseService } from './bonded-warehouse.service';
 import { CreateBondedItemDto } from './dto/create-bonded-item.dto';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { ListBondedItemsDto } from './dto/list-bonded-items.dto';
+import { CreateShipmentDto, UpdateShipmentDto } from './dto/shipment.dto';
 import { UpdateBondedItemDto } from './dto/update-bonded-item.dto';
 
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -93,6 +94,24 @@ export class BondedWarehouseController {
   ) {
     if (!file) throw new BadRequestException('No file provided');
     return this.excel.import(file.buffer, user.userId, clearanceJobId);
+  }
+
+  @Post('shipments')
+  @RequirePermission('operation.edit')
+  createShipment(
+    @Body() dto: CreateShipmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.bonded.createShipment(dto, user.userId);
+  }
+
+  @Patch('shipments')
+  @RequirePermission('operation.edit')
+  updateShipment(
+    @Body() dto: UpdateShipmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.bonded.updateShipment(dto, user.userId);
   }
 
   @Get('items/:id')

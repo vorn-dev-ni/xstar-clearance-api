@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateBondedItemDto } from './dto/create-bonded-item.dto';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { ListBondedItemsDto } from './dto/list-bonded-items.dto';
+import { CreateShipmentDto, UpdateShipmentDto } from './dto/shipment.dto';
 import { UpdateBondedItemDto } from './dto/update-bonded-item.dto';
 
 /** One aggregated row of the "Stock Movement Summary" sheet (grouped by B/L). */
@@ -203,6 +204,73 @@ export class BondedWarehouseService {
   }
 
   /**
+   * Fan-out update: apply the shared shipment-header fields to every stock item
+   * in a B/L group (matched by clearanceJobId and/or blNumber). Returns the
+   * number of items updated. At least one group key is required so we never
+   * accidentally update the whole table.
+   */
+  async updateShipment(dto: UpdateShipmentDto, userId?: string) {
+    if (!dto.clearanceJobId && !dto.blNumber) {
+      throw new BadRequestException(
+        'Provide clearanceJobId and/or blNumber to target a shipment group',
+      );
+    }
+    const where: Prisma.BondedWarehouseItemWhereInput = {
+      ...(dto.clearanceJobId ? { clearanceJobId: dto.clearanceJobId } : {}),
+      ...(dto.blNumber ? { blNumber: dto.blNumber } : {}),
+    };
+    const data = toItemData(dto.fields);
+    const result = await this.prisma.bondedWarehouseItem.updateMany({
+      where,
+      data,
+    });
+    if (userId) {
+      await this.audit.log({
+        userId,
+        entityType: 'BondedShipment',
+        entityId: dto.blNumber ?? dto.clearanceJobId ?? 'unknown',
+        action: AuditAction.UPDATE,
+        after: { updated: result.count, ...data },
+      });
+    }
+    return { updated: result.count };
+  }
+
+  /**
+   * Bulk create a shipment: one shared header applied to every provided item
+   * row, all in a single transaction. Each item carries the group's blNumber /
+   * clearanceJobId and the shared header fields, then its own per-unit data.
+   */
+  async createShipment(dto: CreateShipmentDto, userId: string) {
+    const header = toItemData(dto.header);
+    const created = await this.prisma.$transaction(
+      dto.items.map((item) => {
+        const quantity = item.quantity ?? 1;
+        return this.prisma.bondedWarehouseItem.create({
+          data: {
+            ...header,
+            ...toItemData(item),
+            blNumber: dto.blNumber,
+            clearanceJobId: dto.clearanceJobId ?? item.clearanceJobId ?? null,
+            quantity,
+            releasedQty: 0,
+            stockBalance: quantity,
+            createdBy: userId,
+          },
+        });
+      }),
+    );
+    await this.audit.log({
+      userId,
+      entityType: 'BondedShipment',
+      entityId: dto.blNumber,
+      action: AuditAction.CREATE,
+      after: { blNumber: dto.blNumber, items: created.length },
+    });
+    return { blNumber: dto.blNumber, created: created.length, items: created };
+  }
+
+  /**
    * Stock Movement Summary — aggregates stock detail rows by B/L into the
    * client's summary sheet shape. Computed on the fly so it always reconciles
    * with the detail rows.
@@ -271,14 +339,29 @@ export class BondedWarehouseService {
   }
 }
 
+/** Date-coercible item/header fields handled specially by {@link toItemData}. */
+type ItemDataInput = Partial<
+  Pick<
+    CreateBondedItemDto,
+    'receivedDateKwb' | 'outboundDate' | 'etaDate' | 'transitDate' | 'inboundDate'
+  >
+> &
+  Record<string, unknown>;
+
 /** Whitelist + date-coerce the DTO fields that map directly onto the model. */
-function toItemData(
-  dto: CreateBondedItemDto | UpdateBondedItemDto,
-): Record<string, unknown> {
-  const { receivedDateKwb, etaDate, transitDate, inboundDate, ...rest } = dto;
+function toItemData(input: object): Record<string, unknown> {
+  const {
+    receivedDateKwb,
+    outboundDate,
+    etaDate,
+    transitDate,
+    inboundDate,
+    ...rest
+  } = input as ItemDataInput;
   return {
     ...rest,
     ...(receivedDateKwb ? { receivedDateKwb: new Date(receivedDateKwb) } : {}),
+    ...(outboundDate ? { outboundDate: new Date(outboundDate) } : {}),
     ...(etaDate ? { etaDate: new Date(etaDate) } : {}),
     ...(transitDate ? { transitDate: new Date(transitDate) } : {}),
     ...(inboundDate ? { inboundDate: new Date(inboundDate) } : {}),

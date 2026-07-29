@@ -119,11 +119,19 @@ export class CreateBondedItemDto {
 
   @ApiPropertyOptional({
     example: '2025-12-31',
-    description: 'Received in KWB',
+    description: 'Inbound Date — physical transfer-in (drives day-count)',
   })
   @IsOptional()
   @IsISO8601()
   receivedDateKwb?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-06-30',
+    description: 'Outbound Date — manual release-out (ends day-count)',
+  })
+  @IsOptional()
+  @IsISO8601()
+  outboundDate?: string;
 
   @ApiPropertyOptional({ description: 'ID of the WarehouseLocation' })
   @IsString()
