@@ -51,7 +51,7 @@ export class BillRecordItemDto {
   @ApiProperty({ example: 2.5 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  unitPrice!: number;
+  hsCode!: number;
 
   @ApiPropertyOptional()
   @IsOptional()
