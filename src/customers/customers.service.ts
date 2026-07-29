@@ -52,6 +52,9 @@ export class CustomersService {
           ...dto,
           customerId,
           registrationDate: new Date(dto.registrationDate),
+          patentExpiryDate: dto.patentExpiryDate
+            ? new Date(dto.patentExpiryDate)
+            : undefined,
         },
       });
       await this.audit.log({
@@ -75,9 +78,16 @@ export class CustomersService {
             OR: [
               { nameEn: { contains: query.search, mode: 'insensitive' } },
               { customerId: { contains: query.search, mode: 'insensitive' } },
+              { taxId: { contains: query.search, mode: 'insensitive' } },
             ],
           }
         : {}),
+      // `lt`/`gte` on a nullable DateTime excludes NULLs → no-patent customers omitted.
+      ...(query.patentStatus === 'EXPIRED'
+        ? { patentExpiryDate: { lt: new Date() } }
+        : query.patentStatus === 'VALID'
+          ? { patentExpiryDate: { gte: new Date() } }
+          : {}),
     };
     const { skip, take } = toSkipTake(query.page, query.limit);
     const [data, total] = await this.prisma.$transaction([
@@ -124,6 +134,13 @@ export class CustomersService {
           ...(dto.registrationDate
             ? { registrationDate: new Date(dto.registrationDate) }
             : {}),
+          ...(dto.patentExpiryDate !== undefined
+            ? {
+                patentExpiryDate: dto.patentExpiryDate
+                  ? new Date(dto.patentExpiryDate)
+                  : null,
+              }
+            : {}),
         },
       });
       await this.audit.log({
@@ -158,6 +175,11 @@ export class CustomersService {
       e instanceof Prisma.PrismaClientKnownRequestError &&
       e.code === 'P2002'
     ) {
+      const target = e.meta?.target;
+      const fields = Array.isArray(target) ? target.join(',') : String(target);
+      if (fields.includes('taxId')) {
+        return new ConflictException('A customer with this TIN already exists');
+      }
       return new ConflictException('A customer with this ID already exists');
     }
     return e;

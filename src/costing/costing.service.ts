@@ -3,13 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import {
-  AuditAction,
-  ExpenseType,
-  Prisma,
-  ServiceType,
-  TransactionStatus,
-} from '@prisma/client';
+import { AuditAction, Prisma, TransactionStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { ACCOUNT_CODES } from '../common/accounting.constants';
 import { paginationMeta, toSkipTake } from '../common/pagination';
@@ -219,7 +213,7 @@ export class CostingService {
       {
         recordDate: dto.date,
         description: dto.description,
-        expenseType: ExpenseType.OTHER,
+        expenseType: 'OTHER',
         supplierName: dto.payeeName,
         clearanceJobId: jobId,
         amount: dto.amount,
@@ -282,7 +276,7 @@ export class CostingService {
       {
         recordDate: dto.date,
         description: dto.description,
-        serviceType: ServiceType.OTHER,
+        serviceType: 'OTHER',
         customerId: job.customerId,
         clearanceJobId: jobId,
         amount: dto.amount,

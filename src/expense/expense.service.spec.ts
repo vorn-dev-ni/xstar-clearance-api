@@ -18,6 +18,11 @@ function build() {
   };
   const prisma = {
     $transaction: jest.fn((cb: (t: typeof tx) => unknown) => cb(tx)),
+    expenseType: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ code: 'TECHNICAL_OPERATIONS', isActive: true }),
+    },
   };
   const audit = { log: jest.fn().mockResolvedValue(undefined) };
   const service = new ExpenseService(

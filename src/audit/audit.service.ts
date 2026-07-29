@@ -46,12 +46,25 @@ export class AuditService {
   async list(filters: {
     entityType?: string;
     action?: AuditAction;
+    search?: string;
     skip: number;
     take: number;
   }) {
+    const search = filters.search?.trim();
     const where: Prisma.AuditLogWhereInput = {
       entityType: filters.entityType,
       action: filters.action,
+      ...(search
+        ? {
+            user: {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
     };
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.auditLog.findMany({

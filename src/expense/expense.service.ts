@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -29,7 +30,16 @@ export class ExpenseService {
     private readonly audit: AuditService,
   ) {}
 
+  /** Validate the expenseType code exists and is active (accounting-managed config). */
+  private async assertExpenseType(code: string) {
+    const type = await this.prisma.expenseType.findUnique({ where: { code } });
+    if (!type || !type.isActive) {
+      throw new BadRequestException('Invalid or inactive expense type');
+    }
+  }
+
   async create(dto: CreateExpenseDto, userId: string) {
+    await this.assertExpenseType(dto.expenseType);
     // Prefer an explicit tax amount (B/L costing enters tax as money), else
     // derive it from the tax rate.
     const taxAmount =
@@ -175,6 +185,7 @@ export class ExpenseService {
         'Posted expense records cannot be edited',
       );
     }
+    if (dto.expenseType) await this.assertExpenseType(dto.expenseType);
     // Recompute tax + actual cost from the merged (existing + patch) values so
     // the B/L costing total stays consistent: actualCost = amount + tax − deposit.
     const amount = dto.amount ?? Number(existing.amount);

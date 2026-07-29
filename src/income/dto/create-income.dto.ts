@@ -1,10 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ServiceType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsEnum,
   IsISO8601,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -20,9 +19,13 @@ export class CreateIncomeDto {
   @IsString()
   description!: string;
 
-  @ApiProperty({ enum: ServiceType })
-  @IsEnum(ServiceType)
-  serviceType!: ServiceType;
+  @ApiProperty({
+    description: 'ServiceType.code',
+    example: 'CUSTOMS_CLEARANCE',
+  })
+  @IsString()
+  @IsNotEmpty()
+  serviceType!: string;
 
   @ApiProperty()
   @IsString()

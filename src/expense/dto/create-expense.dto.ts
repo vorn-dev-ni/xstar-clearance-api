@@ -1,10 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ExpenseType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsEnum,
   IsISO8601,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -20,9 +19,10 @@ export class CreateExpenseDto {
   @IsString()
   description!: string;
 
-  @ApiProperty({ enum: ExpenseType })
-  @IsEnum(ExpenseType)
-  expenseType!: ExpenseType;
+  @ApiProperty({ description: 'ExpenseType.code', example: 'OFFICE_SUPPLIES' })
+  @IsString()
+  @IsNotEmpty()
+  expenseType!: string;
 
   @ApiPropertyOptional()
   @IsOptional()

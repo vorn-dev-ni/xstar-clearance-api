@@ -66,6 +66,7 @@ export class InvoicesService {
           taxAmount,
           totalAmount,
           balanceDue: totalAmount,
+          deposit: dto.deposit ?? 0,
           currency: dto.currency,
           description: dto.description,
           notes: dto.notes,

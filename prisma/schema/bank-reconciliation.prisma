@@ -1,0 +1,44 @@
+// ============================================
+// BANK RECONCILIATION
+// ============================================
+// Per-period "Reconciled with bank" statement: an opening balance plus manual
+// money-in/out lines with a running balance, exported to the client's template.
+
+model BankReconciliation {
+  id              String   @id @default(cuid())
+  statementNumber String   @unique // BR-2026-0001
+
+  // The bank account (chart-of-accounts entry, type BANK) being reconciled.
+  bankAccountId String
+  bankAccount   Account @relation("BankReconciliationAccount", fields: [bankAccountId], references: [id])
+
+  periodStart    DateTime
+  periodEnd      DateTime
+  openingBalance Decimal  @db.Decimal(15, 2)
+  notes          String?
+
+  createdBy     String
+  createdByUser User     @relation(fields: [createdBy], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lines BankReconciliationLine[]
+
+  @@index([bankAccountId])
+  @@index([periodStart])
+}
+
+model BankReconciliationLine {
+  id               String             @id @default(cuid())
+  reconciliationId String
+  reconciliation   BankReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+
+  itemNumber  Int
+  description String
+  // Money in/out may be negative (adjustments/reversals) — no non-negative constraint.
+  moneyIn     Decimal @default(0) @db.Decimal(15, 2)
+  moneyOut    Decimal @default(0) @db.Decimal(15, 2)
+  remark      String?
+
+  @@index([reconciliationId])
+}

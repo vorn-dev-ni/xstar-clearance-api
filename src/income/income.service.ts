@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -29,7 +30,16 @@ export class IncomeService {
     private readonly audit: AuditService,
   ) {}
 
+  /** Validate the serviceType code exists and is active (accounting-managed config). */
+  private async assertServiceType(code: string) {
+    const type = await this.prisma.serviceType.findUnique({ where: { code } });
+    if (!type || !type.isActive) {
+      throw new BadRequestException('Invalid or inactive service type');
+    }
+  }
+
   async create(dto: CreateIncomeDto, userId: string) {
+    await this.assertServiceType(dto.serviceType);
     const record = await this.prisma.$transaction(async (tx) => {
       const recordNumber = await nextNumber(
         tx,
@@ -155,6 +165,7 @@ export class IncomeService {
         'Posted income records cannot be edited',
       );
     }
+    if (dto.serviceType) await this.assertServiceType(dto.serviceType);
     const updated = await this.prisma.incomeRecord.update({
       where: { id },
       data: {

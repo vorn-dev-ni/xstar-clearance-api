@@ -95,6 +95,7 @@ export class OperationsService {
     const where: Prisma.ClearanceJobWhereInput = {
       customerId: query.customerId,
       status: query.status,
+      clearanceType: query.clearanceType,
       shipmentStatus: query.shipmentStatus,
       ...(query.search
         ? {

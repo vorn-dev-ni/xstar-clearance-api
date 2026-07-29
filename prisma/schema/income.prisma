@@ -7,7 +7,7 @@ model IncomeRecord {
   recordNumber String      @unique // Auto-generated
   recordDate   DateTime
   description  String // Service description
-  serviceType  ServiceType
+  serviceType  String // references ServiceType.code (accounting-managed config)
 
   // Customer info
   customerId String
@@ -69,14 +69,14 @@ model IncomeRecord {
   @@index([approvalStatus])
 }
 
-enum ServiceType {
-  CUSTOMS_CLEARANCE
-  STORAGE_FEE
-  LICENSE_FEE
-  TRUCKING_SERVICE
-  LOGISTICS_SERVICE
-  BONDED_WAREHOUSE
-  BROKERAGE_SERVICE
-  REFUND
-  OTHER
+/// Accounting-managed income service types (CRUD). `code` is stored on
+/// IncomeRecord.serviceType; `name` is the editable display label.
+model ServiceType {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ClearanceType,
   ContainerType,
   JobStatus,
   ShipmentMode,
@@ -82,6 +83,11 @@ export class BillExpenseItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   amount!: number;
+
+  @ApiPropertyOptional({ description: 'Optional Invoice/CM # reference' })
+  @IsOptional()
+  @IsString()
+  invoiceNumber?: string;
 }
 
 export class CreateClearanceJobDto {
@@ -255,6 +261,10 @@ export class CreateClearanceJobDto {
   @IsOptional()
   @IsEnum(ShipmentTaxStatus)
   shipmentTaxStatus?: ShipmentTaxStatus;
+
+  @ApiProperty({ enum: ClearanceType })
+  @IsEnum(ClearanceType)
+  clearanceType!: ClearanceType;
 
   @ApiPropertyOptional({ example: 20 })
   @IsOptional()

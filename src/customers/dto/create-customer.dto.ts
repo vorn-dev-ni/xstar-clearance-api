@@ -20,6 +20,10 @@ export class CreateCustomerDto {
   @IsString()
   nameEn!: string;
 
+  @ApiProperty({ description: 'TIN (tax identification number)' })
+  @IsString()
+  taxId!: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -98,6 +102,19 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @ApiPropertyOptional({ description: 'Manual patent / registration number' })
+  @IsOptional()
+  @IsString()
+  patentNo?: string;
+
+  @ApiPropertyOptional({
+    example: '2027-07-14',
+    description: 'Patent expiry date',
+  })
+  @IsOptional()
+  @IsISO8601()
+  patentExpiryDate?: string;
 
   @ApiProperty({
     example: '2026-07-14',

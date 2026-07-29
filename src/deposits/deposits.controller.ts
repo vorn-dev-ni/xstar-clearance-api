@@ -18,13 +18,13 @@ import { DepositsService } from './deposits.service';
 
 @ApiTags('deposits')
 @ApiBearerAuth()
-@RequirePermission('accounting.view')
+@RequirePermission('operation.view')
 @Controller('deposits')
 export class DepositsController {
   constructor(private readonly deposits: DepositsService) {}
 
   @Post()
-  @RequirePermission('accounting.edit')
+  @RequirePermission('operation.edit')
   create(@Body() dto: CreateDepositDto, @CurrentUser() user: AuthUser) {
     return this.deposits.create(dto, user.userId);
   }
@@ -40,7 +40,7 @@ export class DepositsController {
   }
 
   @Patch(':id/status')
-  @RequirePermission('accounting.action')
+  @RequirePermission('operation.action')
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateDepositStatusDto,

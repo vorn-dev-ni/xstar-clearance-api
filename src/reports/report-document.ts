@@ -43,6 +43,8 @@ export interface ReportDocument {
   periodLabel: string;
   currency: string;
   sections: ReportSection[];
+  /** Render the PDF in A4 landscape (for wide tables). Excel is unaffected. */
+  landscape?: boolean;
 }
 
 /** "WITHHOLDING_TAX" → "Withholding Tax" */
@@ -54,6 +56,18 @@ export function humanizeEnum(value: string): string {
     .join(' ');
 }
 
+/** Symbol for a currency code; falls back to the code + space (e.g. "KHR "). */
+const CURRENCY_SYMBOL: Record<string, string> = {
+  USD: '$',
+  KHR: '៛',
+  CNY: '¥',
+  RMB: '¥',
+};
+
+export function currencySymbol(currency: string): string {
+  return CURRENCY_SYMBOL[currency] ?? `${currency} `;
+}
+
 export function formatValue(
   value: string | number,
   format: ValueFormat | undefined,
@@ -63,10 +77,10 @@ export function formatValue(
   const fmt = format ?? 'currency';
   switch (fmt) {
     case 'currency':
-      return `${value.toLocaleString('en-US', {
+      return `${currencySymbol(currency)}${value.toLocaleString('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      })} ${currency}`;
+      })}`;
     case 'percent':
       return `${value.toLocaleString('en-US', {
         minimumFractionDigits: 1,

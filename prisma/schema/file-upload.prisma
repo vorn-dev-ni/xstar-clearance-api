@@ -41,7 +41,8 @@ enum DocumentType {
   CUSTOMS_DECLARATION
   // Customer-profile documents
   PATENT
-  YEARLY_VAT_PAYMENT
+  YEARLY_VAT_PAYMENT // legacy — superseded by VAT_CERTIFICATE, kept for existing rows
+  VAT_CERTIFICATE
   REPRESENTATIVE_IMAGE
   MOC_DOCUMENT
   OTHER
