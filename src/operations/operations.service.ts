@@ -96,7 +96,6 @@ export class OperationsService {
       customerId: query.customerId,
       status: query.status,
       clearanceType: query.clearanceType,
-      shipmentType: query.shipmentType,
       shipmentStatus: query.shipmentStatus,
       ...(query.search
         ? {
@@ -193,6 +192,10 @@ export class OperationsService {
                   currency: true,
                   status: true,
                   releasedDate: true,
+                  shippingLine: true,
+                  volume: true,
+                  refundedAmount: true,
+                  refundRequestDate: true,
                 },
                 orderBy: { depositDate: 'desc' as const },
               },

@@ -69,10 +69,19 @@ model Deposit {
   currency String  @default("USD")
   purpose  String // e.g., "Container Deposit", "Shipping Line Deposit"
 
-  // Accounting
-  accountId String
-  account   Account                @relation(fields: [accountId], references: [id])
+  // Container-deposit sheet columns
+  shippingLine      String? // e.g. "EVER GREEN", "SITC"
+  volume            Int? // number of containers (VOL)
+  refundedAmount    Decimal   @default(0) @db.Decimal(15, 2) // Balance = amount − refundedAmount
+  refundRequestDate DateTime? // date the refund was requested
+
+  // Accounting — null for tracking-only deposits created from BL costing (no journal)
+  accountId String?
+  account   Account?               @relation(fields: [accountId], references: [id])
   status    ContainerDepositStatus @default(EIR_DOCS_COLLECTED)
+
+  // The BL-costing cost line (ExpenseRecord) that created this deposit, if any.
+  sourceExpenseId String?
 
   // Tracking
   createdBy     String
@@ -86,6 +95,7 @@ model Deposit {
   @@index([clearanceJobId])
   @@index([depositDate])
   @@index([status])
+  @@index([sourceExpenseId])
 }
 
 /// Container / shipping-line deposit refund lifecycle. The deposit is paid to

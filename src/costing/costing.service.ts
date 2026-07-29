@@ -7,6 +7,7 @@ import { AuditAction, Prisma, TransactionStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { ACCOUNT_CODES } from '../common/accounting.constants';
 import { paginationMeta, toSkipTake } from '../common/pagination';
+import { DepositsService } from '../deposits/deposits.service';
 import { ExpenseService } from '../expense/expense.service';
 import { IncomeService } from '../income/income.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -42,6 +43,7 @@ export class CostingService {
     private readonly expense: ExpenseService,
     private readonly income: IncomeService,
     private readonly audit: AuditService,
+    private readonly deposits: DepositsService,
   ) {}
 
   /** List B/Ls (clearance jobs) with cost/income/profit roll-ups. */
@@ -209,7 +211,7 @@ export class CostingService {
   async addCostLine(jobId: string, dto: CreateCostLineDto, userId: string) {
     await this.requireJob(jobId);
     const accountId = await this.accountIdByCode(ACCOUNT_CODES.COSTING_EXPENSE);
-    return this.expense.create(
+    const created = await this.expense.create(
       {
         recordDate: dto.date,
         description: dto.description,
@@ -225,6 +227,22 @@ export class CostingService {
       },
       userId,
     );
+    // A deposit on the cost line spins up a linked (tracking-only) container
+    // deposit for the shipment's B/L, managed through the refund status stepper.
+    if (dto.deposit && dto.deposit > 0) {
+      await this.deposits.createForCostLine(
+        {
+          clearanceJobId: jobId,
+          depositDate: dto.date,
+          amount: dto.deposit,
+          shippingLine: dto.shippingLine,
+          volume: dto.volume,
+          sourceExpenseId: created.id,
+        },
+        userId,
+      );
+    }
+    return created;
   }
 
   updateCostLine(id: string, dto: UpdateCostLineDto, userId: string) {

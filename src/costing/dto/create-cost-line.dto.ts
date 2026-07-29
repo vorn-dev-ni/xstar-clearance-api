@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsISO8601,
+  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -47,6 +48,21 @@ export class CreateCostLineDto {
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   deposit?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Shipping line for the linked container deposit (when deposit > 0)',
+  })
+  @IsOptional()
+  @IsString()
+  shippingLine?: string;
+
+  @ApiPropertyOptional({
+    description: 'Container volume (VOL) for the linked container deposit',
+  })
+  @IsOptional()
+  @IsInt()
+  volume?: number;
 
   @ApiPropertyOptional({ description: 'Remark (备注)' })
   @IsOptional()

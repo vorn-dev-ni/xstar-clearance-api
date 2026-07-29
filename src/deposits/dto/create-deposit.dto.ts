@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsISO8601,
+  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -46,6 +47,16 @@ export class CreateDepositDto {
   @ApiProperty({ description: 'Account id the deposit is booked against' })
   @IsString()
   accountId!: string;
+
+  @ApiPropertyOptional({ description: 'Shipping line (e.g. EVER GREEN)' })
+  @IsOptional()
+  @IsString()
+  shippingLine?: string;
+
+  @ApiPropertyOptional({ description: 'Number of containers (VOL)' })
+  @IsOptional()
+  @IsInt()
+  volume?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -22,7 +22,7 @@ const depositInclude = {
   customer: { select: { nameEn: true } },
   supplier: { select: { nameEn: true } },
   account: { select: { code: true, nameEn: true } },
-  clearanceJob: { select: { jobNumber: true } },
+  clearanceJob: { select: { jobNumber: true, blBookingNumber: true } },
 } satisfies Prisma.DepositInclude;
 
 /** Ordered container-deposit refund lifecycle. Status may only move ±1 step. */
@@ -59,6 +59,8 @@ export class DepositsService {
           amount: dto.amount,
           currency: dto.currency,
           purpose: dto.purpose,
+          shippingLine: dto.shippingLine,
+          volume: dto.volume,
           accountId: dto.accountId,
           notes: dto.notes,
           createdBy: userId,
@@ -102,6 +104,58 @@ export class DepositsService {
     return deposit;
   }
 
+  /**
+   * Create a tracking-only container deposit from a BL-costing cost line. It is
+   * NOT posted to the ledger (accountId stays null → no journal on create or
+   * refund) — the cash is already represented by the cost line. It still flows
+   * through the normal refund status stepper.
+   */
+  async createForCostLine(
+    params: {
+      clearanceJobId: string;
+      depositDate: string;
+      amount: number;
+      shippingLine?: string;
+      volume?: number;
+      sourceExpenseId: string;
+    },
+    userId: string,
+  ) {
+    // Remark is intentionally NOT carried from the cost line — it is captured
+    // later at the AWAITING_DEPOSIT_REFUND step.
+    const deposit = await this.prisma.$transaction((tx) =>
+      nextDepositNumber(tx, new Date(params.depositDate)).then(
+        (depositNumber) =>
+          tx.deposit.create({
+            data: {
+              depositNumber,
+              depositDate: new Date(params.depositDate),
+              clearanceJobId: params.clearanceJobId,
+              amount: params.amount,
+              purpose: 'Container Deposit',
+              shippingLine: params.shippingLine,
+              volume: params.volume,
+              sourceExpenseId: params.sourceExpenseId,
+              createdBy: userId,
+            },
+            include: depositInclude,
+          }),
+      ),
+    );
+    await this.audit.log({
+      userId,
+      entityType: 'Deposit',
+      entityId: deposit.id,
+      action: AuditAction.CREATE,
+      after: {
+        depositNumber: deposit.depositNumber,
+        amount: Number(deposit.amount),
+        sourceExpenseId: params.sourceExpenseId,
+      },
+    });
+    return deposit;
+  }
+
   async findAll(query: ListDepositsDto) {
     const where = buildWhere(query);
     const { skip, take } = toSkipTake(query.page, query.limit);
@@ -136,6 +190,7 @@ export class DepositsService {
     id: string,
     status: ContainerDepositStatus,
     userId: string,
+    opts?: { refundRequestDate?: string; remark?: string },
   ) {
     const deposit = await this.prisma.deposit.findUnique({ where: { id } });
     if (!deposit) throw new NotFoundException('Deposit not found');
@@ -155,17 +210,31 @@ export class DepositsService {
       const becomingRefunded =
         status === ContainerDepositStatus.DEPOSIT_REFUNDED &&
         deposit.status !== ContainerDepositStatus.DEPOSIT_REFUNDED;
+      // Capture the refund request date + remark when moving into that stage.
+      // The date defaults to today; the remark is entered by the user there.
+      const requestingRefund =
+        status === ContainerDepositStatus.AWAITING_DEPOSIT_REFUND;
 
       const updated = await tx.deposit.update({
         where: { id },
         data: {
           status,
           releasedDate: becomingRefunded ? new Date() : deposit.releasedDate,
+          // Full refund on completion; Balance = amount − refundedAmount.
+          refundedAmount: becomingRefunded ? deposit.amount : undefined,
+          refundRequestDate: requestingRefund
+            ? opts?.refundRequestDate
+              ? new Date(opts.refundRequestDate)
+              : new Date()
+            : undefined,
+          notes: requestingRefund && opts?.remark ? opts.remark : undefined,
         },
         include: depositInclude,
       });
 
-      if (becomingRefunded) {
+      // Only ledger-posted deposits (manual, with an account) reverse on refund;
+      // tracking-only deposits from BL costing (accountId null) skip the journal.
+      if (becomingRefunded && deposit.accountId) {
         const bankId = await this.journal.accountIdByCode(
           tx,
           ACCOUNT_CODES.BANK,

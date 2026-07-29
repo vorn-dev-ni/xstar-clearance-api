@@ -5,7 +5,6 @@ import {
   JobStatus,
   ShipmentMode,
   ShipmentTaxStatus,
-  ShipmentType,
   TransportMode,
 } from '@prisma/client';
 import { Type } from 'class-transformer';
@@ -262,11 +261,6 @@ export class CreateClearanceJobDto {
   @IsOptional()
   @IsEnum(ShipmentTaxStatus)
   shipmentTaxStatus?: ShipmentTaxStatus;
-
-  @ApiPropertyOptional({ enum: ShipmentType, default: 'EXCLUDE_BONDED' })
-  @IsOptional()
-  @IsEnum(ShipmentType)
-  shipmentType?: ShipmentType;
 
   @ApiProperty({ enum: ClearanceType })
   @IsEnum(ClearanceType)

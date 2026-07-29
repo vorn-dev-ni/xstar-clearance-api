@@ -7,5 +7,6 @@ import { DepositsService } from './deposits.service';
   imports: [JournalModule],
   controllers: [DepositsController],
   providers: [DepositsService],
+  exports: [DepositsService],
 })
 export class DepositsModule {}

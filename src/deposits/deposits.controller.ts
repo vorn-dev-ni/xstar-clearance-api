@@ -46,6 +46,9 @@ export class DepositsController {
     @Body() dto: UpdateDepositStatusDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.deposits.updateStatus(id, dto.status, user.userId);
+    return this.deposits.updateStatus(id, dto.status, user.userId, {
+      refundRequestDate: dto.refundRequestDate,
+      remark: dto.remark,
+    });
   }
 }
