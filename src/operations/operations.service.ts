@@ -359,7 +359,7 @@ function withComputedAmount(item: BillRecordItemDto, idx: number) {
     ...cleanItem,
     itemNumber: cleanItem.itemNumber ?? idx + 1,
     amount: round2(
-      Number(cleanItem.quantity ?? 0) * Number(cleanItem.unitPrice ?? 0),
+      Number(cleanItem.quantity ?? 0) * Number(cleanItem.hsCode ?? 0),
     ),
   };
 }

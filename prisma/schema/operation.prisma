@@ -156,8 +156,8 @@ model BillRecordItem {
   itemNumber     Int
   description    String
   quantity       Decimal      @db.Decimal(15, 4)
-  unitPrice      Decimal      @db.Decimal(15, 2)
-  amount         Decimal      @db.Decimal(15, 2) // computed = quantity * unitPrice
+  hsCode         Decimal      @db.Decimal(15, 2)
+  amount         Decimal      @db.Decimal(15, 2) // computed = quantity * hsCode
 
   @@index([clearanceJobId])
 }
