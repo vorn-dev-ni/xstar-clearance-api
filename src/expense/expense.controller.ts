@@ -21,7 +21,11 @@ import { ExportExpensesDto } from './dto/export-expenses.dto';
 import { ListExpensesDto } from './dto/list-expenses.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { ExpenseExportService } from './expense-export.service';
+import { ExpenseVoucherService } from './expense-voucher.service';
 import { ExpenseService } from './expense.service';
+
+const XLSX_MIME =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 @ApiTags('expenses')
 @ApiBearerAuth()
@@ -31,6 +35,7 @@ export class ExpenseController {
   constructor(
     private readonly expense: ExpenseService,
     private readonly exporter: ExpenseExportService,
+    private readonly voucher: ExpenseVoucherService,
   ) {}
 
   @Post()
@@ -52,24 +57,43 @@ export class ExpenseController {
   ): Promise<void> {
     const { rows, summary } = await this.expense.findAllForExport(query);
     const format = query.format ?? ExportFormat.PDF;
-    const buffer = await this.exporter.export(rows, summary, query, format);
 
+    // Excel → a Payment-Voucher workbook (one sheet per expense in range).
     if (format === ExportFormat.EXCEL) {
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
+      const buffer = await this.voucher.vouchersWorkbook(rows);
+      res.setHeader('Content-Type', XLSX_MIME);
       res.setHeader(
         'Content-Disposition',
-        'attachment; filename="expenses.xlsx"',
+        'attachment; filename="Payment vouchers.xlsx"',
       );
-    } else {
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader(
-        'Content-Disposition',
-        'attachment; filename="expenses.pdf"',
-      );
+      res.send(buffer);
+      return;
     }
+
+    // PDF → the flat expense register table.
+    const buffer = await this.exporter.export(
+      rows,
+      summary,
+      query,
+      ExportFormat.PDF,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="expenses.pdf"');
+    res.send(buffer);
+  }
+
+  // Single expense → its Payment Voucher xlsx. Before ':id' path routes.
+  @Get(':id/voucher.xlsx')
+  async voucherExcel(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { buffer, recordNumber } = await this.voucher.voucherExcel(id);
+    res.setHeader('Content-Type', XLSX_MIME);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${recordNumber}.xlsx"`,
+    );
     res.send(buffer);
   }
 

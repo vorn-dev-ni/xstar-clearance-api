@@ -40,19 +40,22 @@ export class ExpenseService {
 
   async create(dto: CreateExpenseDto, userId: string) {
     await this.assertExpenseType(dto.expenseType);
+    // A voucher's total is the sum of its line items; fall back to a flat
+    // amount for legacy/single-line callers (B/L costing, clearance bills).
+    const amount = resolveAmount(dto);
     // Prefer an explicit tax amount (B/L costing enters tax as money), else
     // derive it from the tax rate.
     const taxAmount =
       dto.taxAmount != null
         ? round2(dto.taxAmount)
         : dto.taxRate != null
-          ? round2((dto.amount * dto.taxRate) / 100)
+          ? round2((amount * dto.taxRate) / 100)
           : 0;
     const hasTax = dto.taxAmount != null || dto.taxRate != null;
     // Actual cost mirrors the client's B/L costing formula:
     // Amount + Tax − Deposit (explicit override still honored).
     const actualCost =
-      dto.actualCost ?? round2(dto.amount + taxAmount - (dto.deposit ?? 0));
+      dto.actualCost ?? round2(amount + taxAmount - (dto.deposit ?? 0));
     const record = await this.prisma.$transaction(async (tx) => {
       const recordNumber = await nextNumber(
         tx,
@@ -68,7 +71,7 @@ export class ExpenseService {
           supplierId: dto.supplierId,
           supplierName: dto.supplierName,
           clearanceJobId: dto.clearanceJobId,
-          amount: dto.amount,
+          amount,
           currency: dto.currency,
           accountId: dto.accountId,
           taxRate: dto.taxRate,
@@ -82,7 +85,16 @@ export class ExpenseService {
           unitCost: dto.unitCost,
           notes: dto.notes,
           attachmentUrl: dto.attachmentUrl,
+          purpose: dto.purpose,
+          accountNumber: dto.accountNumber,
+          accountName: dto.accountName,
+          cashAdvance: dto.cashAdvance ?? 0,
+          paymentMethod: dto.paymentMethod,
+          note: dto.note,
           createdBy: userId,
+          items: dto.items?.length
+            ? { create: dto.items.map(toItemCreate) }
+            : undefined,
         },
       });
     });
@@ -154,7 +166,11 @@ export class ExpenseService {
     const [rows, agg] = await this.prisma.$transaction([
       this.prisma.expenseRecord.findMany({
         where,
-        include: { supplier: { select: { id: true, nameEn: true } } },
+        include: {
+          supplier: { select: { id: true, nameEn: true } },
+          account: { select: { code: true } },
+          items: { orderBy: { itemNumber: 'asc' } },
+        },
         orderBy: { recordDate: 'desc' },
         take: 1000,
       }),
@@ -172,7 +188,11 @@ export class ExpenseService {
   async findOne(id: string) {
     const record = await this.prisma.expenseRecord.findUnique({
       where: { id },
-      include: { supplier: true, account: true },
+      include: {
+        supplier: true,
+        account: true,
+        items: { orderBy: { itemNumber: 'asc' } },
+      },
     });
     if (!record) throw new NotFoundException('Expense record not found');
     return record;
@@ -186,9 +206,14 @@ export class ExpenseService {
       );
     }
     if (dto.expenseType) await this.assertExpenseType(dto.expenseType);
+    // `items` is a nested relation, not a scalar column — pull it out of the
+    // spread and apply it as a replace-all below.
+    const { items, recordDate, amount: _amount, ...rest } = dto;
     // Recompute tax + actual cost from the merged (existing + patch) values so
     // the B/L costing total stays consistent: actualCost = amount + tax − deposit.
-    const amount = dto.amount ?? Number(existing.amount);
+    const amount = items?.length
+      ? round2(items.reduce((s, i) => s + i.amount, 0))
+      : (dto.amount ?? Number(existing.amount));
     const taxRate =
       dto.taxRate ??
       (existing.taxRate != null ? Number(existing.taxRate) : null);
@@ -207,13 +232,23 @@ export class ExpenseService {
     const updated = await this.prisma.expenseRecord.update({
       where: { id },
       data: {
-        ...dto,
-        recordDate: dto.recordDate ? new Date(dto.recordDate) : undefined,
+        ...rest,
+        recordDate: recordDate ? new Date(recordDate) : undefined,
+        amount,
         taxAmount,
         actualCost,
         // Editing an expense sends it back for approval.
         approvalStatus: ApprovalStatus.PENDING,
         status: TransactionStatus.PENDING,
+        // Replace the voucher lines when a new set is supplied.
+        ...(items
+          ? {
+              items: {
+                deleteMany: {},
+                create: items.map(toItemCreate),
+              },
+            }
+          : {}),
       },
     });
     await this.audit.log({
@@ -326,6 +361,36 @@ export class ExpenseService {
 }
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** Voucher total = sum of item amounts, else the flat `amount` (legacy callers). */
+function resolveAmount(dto: CreateExpenseDto): number {
+  if (dto.items?.length) {
+    return round2(dto.items.reduce((s, i) => s + i.amount, 0));
+  }
+  if (dto.amount == null) {
+    throw new BadRequestException('Provide line items or an amount');
+  }
+  return dto.amount;
+}
+
+/** Map an item DTO to a Prisma nested-create row. */
+function toItemCreate(i: {
+  itemNumber: number;
+  acCode?: string;
+  itemDate?: string;
+  invoiceNumber?: string;
+  description: string;
+  amount: number;
+}): Prisma.ExpenseItemCreateWithoutExpenseRecordInput {
+  return {
+    itemNumber: i.itemNumber,
+    acCode: i.acCode,
+    itemDate: i.itemDate ? new Date(i.itemDate) : undefined,
+    invoiceNumber: i.invoiceNumber,
+    description: i.description,
+    amount: i.amount,
+  };
+}
 
 async function nextNumber(
   tx: Prisma.TransactionClient,

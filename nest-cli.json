@@ -7,7 +7,8 @@
     "assets": [
       { "include": "invoices/fonts/*.ttf", "outDir": "dist" },
       { "include": "invoices/templates/*.xlsx", "outDir": "dist" },
-      { "include": "bank-reconciliation/templates/*.xlsx", "outDir": "dist" }
+      { "include": "bank-reconciliation/templates/*.xlsx", "outDir": "dist" },
+      { "include": "expense/templates/*.xlsx", "outDir": "dist" }
     ],
     "watchAssets": true
   }

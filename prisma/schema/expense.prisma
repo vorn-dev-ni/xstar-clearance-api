@@ -40,6 +40,17 @@ model ExpenseRecord {
   approvalDate    DateTime?
   rejectionReason String?
 
+  // Payment-voucher header fields
+  purpose       String? // Voucher "Purpose" line
+  accountNumber String? // Payee bank account number (manual)
+  accountName   String? // Payee bank account name (manual)
+  cashAdvance   Decimal  @default(0) @db.Decimal(15, 2) // LESS: Cash Advance
+  paymentMethod String? // CASH | CHEQUE (ticks the voucher box)
+  note          String? // Voucher "Note:" line
+
+  // Voucher line items
+  items ExpenseItem[]
+
   // Details
   quantity      Int?
   unitCost      Decimal? @db.Decimal(15, 2)
@@ -67,6 +78,25 @@ model ExpenseRecord {
   @@index([expenseType])
   @@index([status])
   @@index([approvalStatus])
+}
+
+/// One line of a payment voucher (Item No · A/C Code · Date · Invoice No ·
+/// Description · Amount). The parent ExpenseRecord.amount = sum of item amounts.
+model ExpenseItem {
+  id              String        @id @default(cuid())
+  expenseRecordId String
+  expenseRecord   ExpenseRecord @relation(fields: [expenseRecordId], references: [id], onDelete: Cascade)
+
+  itemNumber    Int
+  acCode        String? // Optional A/C code text shown on the voucher
+  itemDate      DateTime? // Line date; defaults to the record date on the voucher
+  invoiceNumber String?
+  description   String
+  amount        Decimal @db.Decimal(15, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([expenseRecordId])
 }
 
 /// Accounting-managed expense types (CRUD). `code` is stored on
