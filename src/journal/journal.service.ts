@@ -141,7 +141,7 @@ export class JournalService {
       this.prisma.journalEntry.findMany({
         where,
         include: { lines: { include: { account: true } } },
-        orderBy: { entryDate: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { entryDate: 'desc' }],
         skip,
         take,
       }),

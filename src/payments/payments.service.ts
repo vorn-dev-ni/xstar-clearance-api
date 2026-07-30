@@ -26,7 +26,7 @@ export class PaymentsService {
             },
           },
         },
-        orderBy: { paymentDate: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { paymentDate: 'desc' }],
         skip,
         take,
       }),

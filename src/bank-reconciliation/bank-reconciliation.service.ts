@@ -73,7 +73,7 @@ export class BankReconciliationService {
           bankAccount: bankAccountSelect,
           lines: { select: { moneyIn: true, moneyOut: true } },
         },
-        orderBy: { periodStart: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { periodStart: 'desc' }],
         skip,
         take,
       }),

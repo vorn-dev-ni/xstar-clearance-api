@@ -52,7 +52,7 @@ export class TaxService {
 
   findAll() {
     return this.prisma.taxFilingRecord.findMany({
-      orderBy: { filingPeriod: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { filingPeriod: 'desc' }],
     });
   }
 

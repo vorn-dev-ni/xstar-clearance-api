@@ -134,7 +134,7 @@ export class InvoicesService {
       this.prisma.invoice.findMany({
         where,
         include: { customer: { select: { nameEn: true } } },
-        orderBy: { invoiceDate: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { invoiceDate: 'desc' }],
         skip,
         take,
       }),

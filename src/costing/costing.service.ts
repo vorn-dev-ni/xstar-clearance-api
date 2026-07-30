@@ -72,7 +72,7 @@ export class CostingService {
           customerName: true,
           customer: { select: { nameEn: true } },
         },
-        orderBy: { date: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { date: 'desc' }],
         skip,
         take,
       }),

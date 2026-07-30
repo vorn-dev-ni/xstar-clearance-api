@@ -128,7 +128,7 @@ export class VendorPaymentsService {
       this.prisma.vendorPayment.findMany({
         where,
         include: { supplier: { select: { nameEn: true } } },
-        orderBy: { paymentDate: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { paymentDate: 'desc' }],
         skip,
         take,
       }),

@@ -124,7 +124,7 @@ export class OperationsService {
             select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
-        orderBy: { date: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { date: 'desc' }],
         skip,
         take,
       }),

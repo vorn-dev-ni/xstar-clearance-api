@@ -163,7 +163,7 @@ export class DepositsService {
       this.prisma.deposit.findMany({
         where,
         include: depositInclude,
-        orderBy: { depositDate: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { depositDate: 'desc' }],
         skip,
         take,
       }),

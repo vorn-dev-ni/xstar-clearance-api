@@ -103,7 +103,7 @@ export class ClearancePlansService {
       this.prisma.clearancePlan.findMany({
         where,
         include: planInclude,
-        orderBy: [{ clearanceDate: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [{ createdAt: 'desc' }, { clearanceDate: 'desc' }],
         skip,
         take,
       }),

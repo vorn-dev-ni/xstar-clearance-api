@@ -127,7 +127,7 @@ export class ExpenseService {
       this.prisma.expenseRecord.findMany({
         where,
         include: { supplier: { select: { id: true, nameEn: true } } },
-        orderBy: { recordDate: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { recordDate: 'desc' }],
         skip,
         take,
       }),

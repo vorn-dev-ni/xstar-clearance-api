@@ -111,7 +111,7 @@ export class IncomeService {
       this.prisma.incomeRecord.findMany({
         where,
         include: { customer: { select: { id: true, nameEn: true } } },
-        orderBy: { recordDate: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { recordDate: 'desc' }],
         skip,
         take,
       }),

@@ -18,6 +18,7 @@ import type { Response } from 'express';
 import type { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../permissions/require-permission.decorator';
+import { BondedSummaryExportService } from './bonded-summary-export.service';
 import { BondedWarehouseExcelService } from './bonded-warehouse-excel.service';
 import { BondedWarehouseService } from './bonded-warehouse.service';
 import { BatchReleaseDto } from './dto/batch-release.dto';
@@ -42,6 +43,7 @@ export class BondedWarehouseController {
   constructor(
     private readonly bonded: BondedWarehouseService,
     private readonly excel: BondedWarehouseExcelService,
+    private readonly summaryExporter: BondedSummaryExportService,
   ) {}
 
   @Post('items')
@@ -80,6 +82,40 @@ export class BondedWarehouseController {
       'Content-Disposition',
       'attachment; filename="bonded-warehouse.xlsx"',
     );
+    res.send(buffer);
+  }
+
+  // Summary-only export (PDF default / Excel), scoped by the active B/L filter.
+  // Declared before ':id' so Nest doesn't treat 'summary' as an id.
+  @Get('summary/export')
+  async summaryExport(
+    @Res() res: Response,
+    @Query('format') format?: 'PDF' | 'EXCEL',
+    @Query('clearanceJobId') clearanceJobId?: string,
+    @Query('blNumber') blNumber?: string,
+    @Query('blNumbers') blNumbers?: string,
+  ): Promise<void> {
+    const fmt = format === 'EXCEL' ? 'EXCEL' : 'PDF';
+    const buffer = await this.summaryExporter.export(
+      { clearanceJobId, blNumber, blNumbers },
+      fmt,
+    );
+    if (fmt === 'EXCEL') {
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="bonded-summary.xlsx"',
+      );
+    } else {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="bonded-summary.pdf"',
+      );
+    }
     res.send(buffer);
   }
 

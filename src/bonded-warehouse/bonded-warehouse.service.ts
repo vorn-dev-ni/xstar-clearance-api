@@ -78,7 +78,7 @@ export class BondedWarehouseService {
         include: {
           clearanceJob: { select: { id: true, jobNumber: true } },
         },
-        orderBy: [{ receivedDateKwb: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [{ createdAt: 'desc' }, { receivedDateKwb: 'desc' }],
         skip,
         take,
       }),
