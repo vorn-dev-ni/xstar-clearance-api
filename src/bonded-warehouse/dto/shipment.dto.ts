@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { BondedDutyStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsEnum,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -82,6 +84,34 @@ export class ShipmentHeaderDto {
   @IsOptional()
   @IsString()
   sadIdIm7?: string;
+
+  @ApiPropertyOptional({
+    example: '2025-12-31',
+    description: 'Received/inbound date in KWB (shared by the shipment)',
+  })
+  @IsOptional()
+  @IsISO8601()
+  receivedDateKwb?: string;
+
+  @ApiPropertyOptional({ example: '2025-12-31' })
+  @IsOptional()
+  @IsISO8601()
+  inboundDate?: string;
+
+  @ApiPropertyOptional({ example: '2026-01-15', description: 'Release / outbound date' })
+  @IsOptional()
+  @IsISO8601()
+  outboundDate?: string;
+
+  @ApiPropertyOptional({ description: 'WarehouseLocation id all items land in' })
+  @IsOptional()
+  @IsString()
+  currentLocationId?: string;
+
+  @ApiPropertyOptional({ enum: BondedDutyStatus })
+  @IsOptional()
+  @IsEnum(BondedDutyStatus)
+  dutyStatus?: BondedDutyStatus;
 }
 
 /** Fan-out update: apply shared header fields to every item on a B/L group. */

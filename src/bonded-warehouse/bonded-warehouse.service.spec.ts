@@ -31,10 +31,14 @@ function makePrisma(items: unknown[] = []) {
       .fn()
       .mockResolvedValue({ id: 'loc_released', name: 'RELEASED' }),
   };
+  const clearanceJob = {
+    findUnique: jest.fn(),
+  };
   const prisma = {
     bondedWarehouseItem,
     bondedWarehouseMovement,
     warehouseLocation,
+    clearanceJob,
     $transaction: jest.fn(
       (arg: Promise<unknown>[] | ((tx: unknown) => unknown)) =>
         typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
@@ -47,6 +51,7 @@ function makePrisma(items: unknown[] = []) {
     bondedWarehouseItem,
     bondedWarehouseMovement,
     warehouseLocation,
+    clearanceJob,
   };
 }
 
@@ -189,27 +194,124 @@ describe('BondedWarehouseService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('bulk-creates a shipment header + items in one transaction', async () => {
+  it('keeps a caller-supplied B/L when it is one of the job’s B/Ls', async () => {
+    const { prisma, audit, clearanceJob } = makePrisma();
+    clearanceJob.findUnique.mockResolvedValue({
+      blBookingNumber: 'PRIMARY',
+      blBookingNumbers: ['PRIMARY', 'SECOND'],
+    });
+    const service = new BondedWarehouseService(prisma, audit);
+    const created = (await service.create(
+      { blNumber: 'SECOND', clearanceJobId: 'job_1' },
+      'user_1',
+    )) as { blNumber: string };
+    expect(created.blNumber).toBe('SECOND');
+  });
+
+  it('falls back to the job primary B/L when the supplied one is unknown', async () => {
+    const { prisma, audit, clearanceJob } = makePrisma();
+    clearanceJob.findUnique.mockResolvedValue({
+      blBookingNumber: 'PRIMARY',
+      blBookingNumbers: ['PRIMARY', 'SECOND'],
+    });
+    const service = new BondedWarehouseService(prisma, audit);
+    const created = (await service.create(
+      { blNumber: 'STRANGER', clearanceJobId: 'job_1' },
+      'user_1',
+    )) as { blNumber: string };
+    expect(created.blNumber).toBe('PRIMARY');
+  });
+
+  it('filters by several comma-separated B/L numbers', async () => {
+    const { prisma, audit, bondedWarehouseItem } = makePrisma();
+    const service = new BondedWarehouseService(prisma, audit);
+    await service.findAll({ page: 1, limit: 20, blNumbers: 'BLA, BLB' });
+    const arg = bondedWarehouseItem.findMany.mock.calls[0][0];
+    expect(arg.where.blNumber).toEqual({ in: ['BLA', 'BLB'] });
+  });
+
+  it('batch-releases every in-stock unit of a container, flipping duty', async () => {
+    const items = [
+      { id: 'i1', quantity: 1, stockBalance: 1, currentLocationId: 'kwb' },
+      { id: 'i2', quantity: 2, stockBalance: 2, currentLocationId: 'kwb' },
+    ];
+    const { prisma, audit, bondedWarehouseItem } = makePrisma(items);
+    const service = new BondedWarehouseService(prisma, audit);
+    const res = await service.batchRelease(
+      { blNumber: 'BLA', containerTruckNumber: 'C1', dutyPaid: true },
+      'user_1',
+    );
+    expect(res).toEqual({ released: 2, totalQuantity: 3 });
+    const firstUpdate = bondedWarehouseItem.update.mock.calls[0][0];
+    expect(firstUpdate.data).toMatchObject({
+      stockBalance: 0,
+      releasedQty: 1,
+      dutyStatus: 'PAID',
+    });
+  });
+
+  it('rejects a batch release with no matching in-stock items', async () => {
+    const { prisma, audit } = makePrisma([]);
+    const service = new BondedWarehouseService(prisma, audit);
+    await expect(
+      service.batchRelease({ blNumber: 'BLA', dutyPaid: false }, 'user_1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('requires a group key to batch release', async () => {
     const { prisma, audit } = makePrisma();
     const service = new BondedWarehouseService(prisma, audit);
+    await expect(
+      service.batchRelease({ dutyPaid: false }, 'user_1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('bulk-creates a shipment header + items, keeping each item’s own B/L', async () => {
+    const { prisma, audit } = makePrisma();
+    const service = new BondedWarehouseService(prisma, audit);
+    // No linked job → each item (container) keeps its own B/L (1–2 per shipment).
     const res = await service.createShipment(
       {
         blNumber: 'BLX',
         header: { importerName: 'ACME', validDays: 180 },
         items: [
-          { blNumber: 'ignored', vin: 'V1' },
-          { blNumber: 'ignored', vin: 'V2' },
+          { blNumber: 'BLX', vin: 'V1' },
+          { blNumber: 'BLY', vin: 'V2' },
         ],
       },
       'user_1',
     );
     expect(res).toMatchObject({ blNumber: 'BLX', created: 2 });
     expect(prisma.$transaction).toHaveBeenCalled();
-    // header fields are merged onto every row, group B/L wins
+    // header fields merged onto every row; per-container B/L preserved
     expect(res.items[0]).toMatchObject({
       blNumber: 'BLX',
       importerName: 'ACME',
       vin: 'V1',
     });
+    expect(res.items[1]).toMatchObject({ blNumber: 'BLY', vin: 'V2' });
+  });
+
+  it('falls back to the job primary B/L for an item B/L not on the shipment', async () => {
+    const { prisma, audit, clearanceJob } = makePrisma();
+    clearanceJob.findUnique.mockResolvedValue({
+      blBookingNumber: 'PRIMARY',
+      blBookingNumbers: ['PRIMARY', 'SECOND'],
+    });
+    const service = new BondedWarehouseService(prisma, audit);
+    const res = await service.createShipment(
+      {
+        blNumber: 'PRIMARY',
+        clearanceJobId: 'job_1',
+        header: {},
+        items: [
+          { blNumber: 'SECOND', vin: 'V1' }, // valid secondary → kept
+          { blNumber: 'STRANGER', vin: 'V2' }, // not on job → primary
+        ],
+      },
+      'user_1',
+    );
+    expect(res.items[0]).toMatchObject({ blNumber: 'SECOND' });
+    expect(res.items[1]).toMatchObject({ blNumber: 'PRIMARY' });
   });
 });

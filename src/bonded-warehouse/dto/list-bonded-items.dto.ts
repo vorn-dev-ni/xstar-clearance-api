@@ -14,6 +14,14 @@ export class ListBondedItemsDto extends PaginationQueryDto {
   @IsString()
   blNumber?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Filter by several exact B/L numbers (comma-separated); takes precedence over blNumber',
+  })
+  @IsOptional()
+  @IsString()
+  blNumbers?: string;
+
   @ApiPropertyOptional({ description: 'Filter by WarehouseLocation ID' })
   @IsOptional()
   @IsString()

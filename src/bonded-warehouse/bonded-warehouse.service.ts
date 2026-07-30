@@ -12,6 +12,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { BatchReleaseDto } from './dto/batch-release.dto';
 import { CreateBondedItemDto } from './dto/create-bonded-item.dto';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { ListBondedItemsDto } from './dto/list-bonded-items.dto';
@@ -173,13 +174,7 @@ export class BondedWarehouseService {
       data.releasedQty = releasedQty;
       data.stockBalance = stockBalance;
       if (stockBalance === 0) {
-        let releasedLoc = await this.prisma.warehouseLocation.findUnique({
-          where: { name: 'RELEASED' },
-        });
-        if (!releasedLoc)
-          releasedLoc = await this.prisma.warehouseLocation.create({
-            data: { name: 'RELEASED' },
-          });
+        const releasedLoc = await this.getReleasedLocation();
         data.currentLocation = { connect: { id: releasedLoc.id } };
       }
       if (dto.dutyPaid) data.dutyStatus = BondedDutyStatus.PAID;
@@ -207,6 +202,90 @@ export class BondedWarehouseService {
       this.prisma.bondedWarehouseItem.update({ where: { id: itemId }, data }),
     ]);
     return movement;
+  }
+
+  /** The terminal "RELEASED" location, created on first use. */
+  private async getReleasedLocation() {
+    const existing = await this.prisma.warehouseLocation.findUnique({
+      where: { name: 'RELEASED' },
+    });
+    if (existing) return existing;
+    return this.prisma.warehouseLocation.create({ data: { name: 'RELEASED' } });
+  }
+
+  /**
+   * Batch release: clear every in-stock unit in a B/L group — optionally
+   * narrowed to one container — in a single transaction. Mirrors the per-item
+   * RELEASE movement (releasedQty/stockBalance/RELEASED location/duty flip),
+   * one movement row per item so the per-unit audit trail stays intact.
+   */
+  async batchRelease(dto: BatchReleaseDto, userId: string) {
+    if (!dto.clearanceJobId && !dto.blNumber) {
+      throw new BadRequestException(
+        'Provide clearanceJobId and/or blNumber to target a shipment group',
+      );
+    }
+    const items = await this.prisma.bondedWarehouseItem.findMany({
+      where: {
+        ...(dto.clearanceJobId ? { clearanceJobId: dto.clearanceJobId } : {}),
+        ...(dto.blNumber ? { blNumber: dto.blNumber } : {}),
+        ...(dto.containerTruckNumber
+          ? { containerTruckNumber: dto.containerTruckNumber }
+          : {}),
+        stockBalance: { gt: 0 },
+      },
+    });
+    if (items.length === 0) {
+      throw new BadRequestException(
+        'No in-stock items match the given B/L / container',
+      );
+    }
+
+    const releasedLoc = await this.getReleasedLocation();
+    const date = dto.date ? new Date(dto.date) : new Date();
+    const totalQuantity = items.reduce((sum, it) => sum + it.stockBalance, 0);
+
+    await this.prisma.$transaction(
+      items.flatMap((it) => [
+        this.prisma.bondedWarehouseMovement.create({
+          data: {
+            itemId: it.id,
+            type: BondedMovementType.RELEASE,
+            quantity: it.stockBalance,
+            fromLocationId: it.currentLocationId,
+            toLocationId: releasedLoc.id,
+            dutyPaid: dto.dutyPaid,
+            sadId: dto.sadId,
+            note: dto.note,
+            date,
+            createdBy: userId,
+          },
+        }),
+        this.prisma.bondedWarehouseItem.update({
+          where: { id: it.id },
+          data: {
+            releasedQty: it.quantity,
+            stockBalance: 0,
+            outboundDate: date,
+            currentLocationId: releasedLoc.id,
+            ...(dto.dutyPaid ? { dutyStatus: BondedDutyStatus.PAID } : {}),
+          },
+        }),
+      ]),
+    );
+    await this.audit.log({
+      userId,
+      entityType: 'BondedShipment',
+      entityId: dto.blNumber ?? dto.clearanceJobId ?? 'unknown',
+      action: AuditAction.UPDATE,
+      after: {
+        released: items.length,
+        totalQuantity,
+        containerTruckNumber: dto.containerTruckNumber ?? null,
+        dutyPaid: dto.dutyPaid,
+      },
+    });
+    return { released: items.length, totalQuantity };
   }
 
   /**
@@ -249,11 +328,23 @@ export class BondedWarehouseService {
    */
   async createShipment(dto: CreateShipmentDto, userId: string) {
     const header = toItemData(dto.header);
-    // The shipment (job) is authoritative for the B/L when one is linked.
-    const blNumber = await this.resolveBlNumber(
-      dto.clearanceJobId,
-      dto.blNumber,
-    );
+    // A shipment can carry 1–2 B/Ls; each item (container) keeps its own B/L.
+    const job = dto.clearanceJobId
+      ? await this.prisma.clearanceJob.findUnique({
+          where: { id: dto.clearanceJobId },
+          select: { blBookingNumber: true, blBookingNumbers: true },
+        })
+      : null;
+    const primaryBl = job?.blBookingNumber || dto.blNumber;
+    const validBls = job?.blBookingNumbers ?? [];
+    // Keep the item's B/L when it belongs to the shipment (or there's no linked
+    // job); otherwise fall back to the shipment's primary B/L.
+    const resolveItemBl = (itemBl?: string): string => {
+      const b = (itemBl || dto.blNumber || '').trim();
+      if (!job) return b || primaryBl;
+      if (b && validBls.includes(b)) return b;
+      return primaryBl;
+    };
     const created = await this.prisma.$transaction(
       dto.items.map((item) => {
         const quantity = item.quantity ?? 1;
@@ -261,7 +352,7 @@ export class BondedWarehouseService {
           data: {
             ...header,
             ...toItemData(item),
-            blNumber,
+            blNumber: resolveItemBl(item.blNumber),
             clearanceJobId: dto.clearanceJobId ?? item.clearanceJobId ?? null,
             quantity,
             releasedQty: 0,
@@ -271,20 +362,22 @@ export class BondedWarehouseService {
         });
       }),
     );
+    const blNumbers = [...new Set(created.map((c) => c.blNumber))];
     await this.audit.log({
       userId,
       entityType: 'BondedShipment',
-      entityId: blNumber,
+      entityId: blNumbers.join(',') || 'unknown',
       action: AuditAction.CREATE,
-      after: { blNumber, items: created.length },
+      after: { blNumbers, items: created.length },
     });
-    return { blNumber, created: created.length, items: created };
+    return { blNumber: primaryBl, created: created.length, items: created };
   }
 
   /**
    * The linked shipment is the source of truth for a bonded item's B/L. When a
-   * `clearanceJobId` is given, return that job's `blBookingNumber`; otherwise
-   * fall back to the supplied value.
+   * `clearanceJobId` is given: keep the supplied value if it is one of the
+   * job's B/Ls (a shipment can carry up to 2), otherwise use the job's primary
+   * `blBookingNumber`. Without a job link, the supplied value is used as-is.
    */
   private async resolveBlNumber(
     clearanceJobId: string | undefined,
@@ -293,9 +386,11 @@ export class BondedWarehouseService {
     if (!clearanceJobId) return fallback;
     const job = await this.prisma.clearanceJob.findUnique({
       where: { id: clearanceJobId },
-      select: { blBookingNumber: true },
+      select: { blBookingNumber: true, blBookingNumbers: true },
     });
-    return job?.blBookingNumber || fallback;
+    if (!job) return fallback;
+    if (fallback && job.blBookingNumbers.includes(fallback)) return fallback;
+    return job.blBookingNumber || fallback;
   }
 
   /**
@@ -306,11 +401,12 @@ export class BondedWarehouseService {
   async summary(query: {
     clearanceJobId?: string;
     blNumber?: string;
+    blNumbers?: string;
   }): Promise<StockMovementSummaryRow[]> {
     const items = await this.prisma.bondedWarehouseItem.findMany({
       where: {
         clearanceJobId: query.clearanceJobId,
-        blNumber: query.blNumber,
+        blNumber: blFilter(query),
       },
       include: { currentLocation: true },
       orderBy: { receivedDateKwb: 'asc' },
@@ -400,12 +496,25 @@ function toItemData(input: object): Record<string, unknown> {
   };
 }
 
+/** Comma-separated `blNumbers` param → Prisma filter (precedence over single). */
+function blFilter(query: {
+  blNumber?: string;
+  blNumbers?: string;
+}): Prisma.BondedWarehouseItemWhereInput['blNumber'] {
+  const list = query.blNumbers
+    ?.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (list?.length) return { in: list };
+  return query.blNumber;
+}
+
 function buildWhere(
   query: ListBondedItemsDto,
 ): Prisma.BondedWarehouseItemWhereInput {
   return {
     clearanceJobId: query.clearanceJobId,
-    blNumber: query.blNumber,
+    blNumber: blFilter(query),
     currentLocationId: query.currentLocationId,
     dutyStatus: query.dutyStatus,
     ...(query.search

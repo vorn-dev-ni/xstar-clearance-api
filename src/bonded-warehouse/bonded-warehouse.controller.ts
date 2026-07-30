@@ -20,6 +20,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../permissions/require-permission.decorator';
 import { BondedWarehouseExcelService } from './bonded-warehouse-excel.service';
 import { BondedWarehouseService } from './bonded-warehouse.service';
+import { BatchReleaseDto } from './dto/batch-release.dto';
 import { CreateBondedItemDto } from './dto/create-bonded-item.dto';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { ListBondedItemsDto } from './dto/list-bonded-items.dto';
@@ -58,8 +59,9 @@ export class BondedWarehouseController {
   summary(
     @Query('clearanceJobId') clearanceJobId?: string,
     @Query('blNumber') blNumber?: string,
+    @Query('blNumbers') blNumbers?: string,
   ) {
-    return this.bonded.summary({ clearanceJobId, blNumber });
+    return this.bonded.summary({ clearanceJobId, blNumber, blNumbers });
   }
 
   // Must precede ':id' so Nest doesn't treat 'export' as an id.
@@ -112,6 +114,12 @@ export class BondedWarehouseController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.bonded.updateShipment(dto, user.userId);
+  }
+
+  @Post('release')
+  @RequirePermission('operation.action')
+  batchRelease(@Body() dto: BatchReleaseDto, @CurrentUser() user: AuthUser) {
+    return this.bonded.batchRelease(dto, user.userId);
   }
 
   @Get('items/:id')

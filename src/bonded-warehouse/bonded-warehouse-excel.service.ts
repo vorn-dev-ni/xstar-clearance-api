@@ -48,7 +48,7 @@ const STOCK_DETAIL_COLUMNS: ColumnSpec[] = [
   { header: 'Current Location', field: 'currentLocationId', type: 'location' },
   { header: "Released QTY' (Unit)", field: 'releasedQty', type: 'int' },
   { header: 'Stock Balance (Unit)', field: 'stockBalance', type: 'int' },
-  { header: 'Days in Warehouse', field: null, compute: daysInWarehouse },
+  { header: 'Day Count', field: null, compute: dayCount },
   { header: 'Valid Days', field: 'validDays', type: 'int' },
   { header: 'ETA DATE', field: 'etaDate', type: 'date' },
   { header: 'SAD ID (IM8)', field: 'sadIdIm8' },
@@ -219,19 +219,18 @@ export class BondedWarehouseExcelService {
 }
 
 /**
- * Days a unit has sat in the warehouse: inbound date → outbound date, or → today
- * while still in stock. Null when there is no inbound date.
+ * Day Count = today − inbound date (`receivedDateKwb`), floored, min 0. Always
+ * counts against the current date, even after release. Null when there is no
+ * inbound date.
  */
-function daysInWarehouse(item: Record<string, unknown>): number | null {
+function dayCount(item: Record<string, unknown>): number | null {
   const inbound = item.receivedDateKwb as Date | string | null | undefined;
   if (!inbound) return null;
   const start = new Date(inbound);
   if (Number.isNaN(start.getTime())) return null;
-  const outbound = item.outboundDate as Date | string | null | undefined;
-  const end = outbound ? new Date(outbound) : new Date();
   return Math.max(
     0,
-    Math.floor((end.getTime() - start.getTime()) / 86_400_000),
+    Math.floor((Date.now() - start.getTime()) / 86_400_000),
   );
 }
 
