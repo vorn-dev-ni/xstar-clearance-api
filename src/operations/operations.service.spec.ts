@@ -1,8 +1,11 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { AuditService } from '../audit/audit.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { OperationsService } from './operations.service';
 import type { CreateClearanceJobDto } from './dto/create-clearance-job.dto';
+
+const audit = { log: jest.fn() } as unknown as AuditService;
 
 function makePrisma() {
   const calls: { findMany?: unknown } = {};
@@ -42,7 +45,7 @@ describe('OperationsService', () => {
         clientVersion: '7',
       }),
     );
-    const service = new OperationsService(prisma);
+    const service = new OperationsService(prisma, audit);
 
     await expect(service.create(dto, 'user_1')).rejects.toBeInstanceOf(
       ConflictException,
@@ -51,7 +54,7 @@ describe('OperationsService', () => {
 
   it('keeps a manually entered job number', async () => {
     const { prisma } = makePrisma();
-    const service = new OperationsService(prisma);
+    const service = new OperationsService(prisma, audit);
 
     const created = (await service.create(dto, 'user_1')) as {
       jobNumber: string;
@@ -62,7 +65,7 @@ describe('OperationsService', () => {
   it('auto-generates the job number from the transaction type', async () => {
     const { prisma, clearanceJob } = makePrisma();
     clearanceJob.count.mockResolvedValue(4);
-    const service = new OperationsService(prisma);
+    const service = new OperationsService(prisma, audit);
 
     const created = (await service.create(
       { date: '2026-05-22', customerId: 'cust_1', transaction: 'IMP' },
@@ -74,7 +77,7 @@ describe('OperationsService', () => {
 
   it('searches by job number or BL/booking number', async () => {
     const { prisma, calls } = makePrisma();
-    const service = new OperationsService(prisma);
+    const service = new OperationsService(prisma, audit);
 
     await service.findAll({
       page: 1,
@@ -87,6 +90,7 @@ describe('OperationsService', () => {
     expect(where.OR).toEqual([
       { jobNumber: { contains: '026F5', mode: 'insensitive' } },
       { blBookingNumber: { contains: '026F5', mode: 'insensitive' } },
+      { blBookingNumbers: { has: '026F5' } },
     ]);
   });
 });

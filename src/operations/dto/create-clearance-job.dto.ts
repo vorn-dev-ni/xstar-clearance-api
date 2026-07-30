@@ -137,6 +137,16 @@ export class CreateClearanceJobDto {
   @IsString()
   blBookingNumber?: string;
 
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['026F5222213', 'COSU66219842'],
+    description: 'All B/Ls on this shipment; first entry is the primary',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  blBookingNumbers?: string[];
+
   @ApiPropertyOptional({ description: 'Link to an income record' })
   @IsOptional()
   @IsString()

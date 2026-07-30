@@ -68,6 +68,7 @@ export class OperationsService {
               : undefined,
             status: dto.status ?? JobStatus.DRAFT_BL_RECEIVED,
             createdBy: userId,
+            ...blWrites(dto),
             ...itemWrites(recordItems, expenseItems),
           } as Prisma.ClearanceJobUncheckedCreateInput,
         });
@@ -107,6 +108,8 @@ export class OperationsService {
                   mode: 'insensitive',
                 },
               },
+              // Also match any secondary B/L on the shipment (exact, case-sensitive).
+              { blBookingNumbers: { has: query.search } },
             ],
           }
         : {}),
@@ -270,6 +273,7 @@ export class OperationsService {
         where: { id },
         data: {
           ...rest,
+          ...blWrites(dto),
           ...(assignedStaffName !== undefined
             ? { assignedStaff: assignedStaffName }
             : {}),
@@ -375,6 +379,25 @@ function cleanExpenseItem(item: BillExpenseItemDto, idx: number) {
     itemNumber: cleanItem.itemNumber ?? idx + 1,
     amount: round2(Number(cleanItem.amount ?? 0)),
   };
+}
+
+/**
+ * Normalizes B/L input into the stored shape. Accepts the new `blBookingNumbers`
+ * array (preferred) or the legacy single `blBookingNumber`, trims/drops empties,
+ * and keeps `blBookingNumber` in sync as the primary (first) entry so existing
+ * consumers (costing, lists, search) keep working. Returns `{}` when no B/L input
+ * is present so an update leaves the stored values untouched.
+ */
+function blWrites(dto: {
+  blBookingNumber?: string;
+  blBookingNumbers?: string[];
+}): { blBookingNumbers: string[]; blBookingNumber: string | null } | object {
+  const source =
+    dto.blBookingNumbers ??
+    (dto.blBookingNumber != null ? [dto.blBookingNumber] : undefined);
+  if (source === undefined) return {};
+  const cleaned = source.map((v) => v.trim()).filter(Boolean);
+  return { blBookingNumbers: cleaned, blBookingNumber: cleaned[0] ?? null };
 }
 
 function itemWrites(

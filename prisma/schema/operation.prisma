@@ -19,7 +19,8 @@ model ClearanceJob {
 
   sizeVolume      String?
   invoiceNumber   String?
-  blBookingNumber String? // e.g. 026F5222213
+  blBookingNumber String? // primary B/L (= blBookingNumbers[0]); e.g. 026F5222213
+  blBookingNumbers String[] @default([]) // all B/Ls on this shipment (mostly 1, sometimes 2)
 
   // Optional link: BL/booking → income record
   incomeRecordId String?
