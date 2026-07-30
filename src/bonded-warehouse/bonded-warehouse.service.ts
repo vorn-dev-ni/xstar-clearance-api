@@ -77,6 +77,7 @@ export class BondedWarehouseService {
         where,
         include: {
           clearanceJob: { select: { id: true, jobNumber: true } },
+          currentLocation: true,
         },
         orderBy: [{ createdAt: 'desc' }, { receivedDateKwb: 'desc' }],
         skip,
@@ -92,6 +93,7 @@ export class BondedWarehouseService {
       where: { id },
       include: {
         clearanceJob: { select: { id: true, jobNumber: true } },
+        currentLocation: true,
         movements: { orderBy: { date: 'desc' } },
       },
     });
@@ -486,8 +488,14 @@ function toItemData(input: object): Record<string, unknown> {
     inboundDate,
     ...rest
   } = input as ItemDataInput;
+  // Drop `undefined` keys: with `transform: true` on the global ValidationPipe,
+  // unset optional DTO props exist as own `undefined` properties. Keeping them
+  // would clobber shared shipment-header fields when merged in `createShipment`.
+  const defined = Object.fromEntries(
+    Object.entries(rest).filter(([, v]) => v !== undefined),
+  );
   return {
-    ...rest,
+    ...defined,
     ...(receivedDateKwb ? { receivedDateKwb: new Date(receivedDateKwb) } : {}),
     ...(outboundDate ? { outboundDate: new Date(outboundDate) } : {}),
     ...(etaDate ? { etaDate: new Date(etaDate) } : {}),

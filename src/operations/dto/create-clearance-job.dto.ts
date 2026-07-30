@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ClearanceType,
-  ContainerType,
   JobStatus,
   ShipmentMode,
   ShipmentTaxStatus,
@@ -257,10 +256,10 @@ export class CreateClearanceJobDto {
   @IsString()
   vesselVoyage?: string;
 
-  @ApiPropertyOptional({ enum: ContainerType })
+  @ApiPropertyOptional({ example: 'FCL', description: 'Free-text container type' })
   @IsOptional()
-  @IsEnum(ContainerType)
-  containerType?: ContainerType;
+  @IsString()
+  containerType?: string;
 
   @ApiPropertyOptional({ enum: ShipmentMode })
   @IsOptional()

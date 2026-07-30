@@ -50,7 +50,7 @@ model ClearanceJob {
   importer          String?
   hsCode            String? // customs HS code
   vesselVoyage      String? // feeder vessel / voyage
-  containerType     ContainerType?
+  containerType     String?
   shipmentMode      ShipmentMode?
   shipmentTaxStatus ShipmentTaxStatus?
   clearanceType     ClearanceType?
@@ -114,12 +114,6 @@ enum JobStatus {
   CONTAINER_RELEASED
   DELIVERY_COMPLETED
   FILE_CLOSED
-}
-
-enum ContainerType {
-  FCL
-  LCL
-  BREAK_BULK
 }
 
 enum ShipmentMode {
