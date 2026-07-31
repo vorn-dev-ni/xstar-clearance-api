@@ -7,6 +7,15 @@ import { amountToWords } from './amount-to-words';
 
 const TEMPLATE = path.join(__dirname, 'templates', 'payment-voucher.xlsx');
 
+// Company logo/brand emblem, anchored top-left of the voucher header (above the
+// "PAYMENT VOUCHER / 付款凭证" title). The 867×807 source is drawn ~square, sized to
+// the column-A header band. `oneCell` pins it so inserted item rows never move it.
+const LOGO_ANCHOR = {
+  tl: { col: 0, row: 0 },
+  ext: { width: 70, height: 65 },
+  editAs: 'oneCell' as const,
+};
+
 // Canonical cell layout of the voucher template (before any row overflow).
 const FIRST_ITEM_ROW = 12;
 const TEMPLATE_ITEM_ROWS = 6; // rows 12..17
@@ -118,6 +127,9 @@ export class ExpenseVoucherService {
     const ws = wb.worksheets[0];
     ws.name = sheetName(expense, new Set());
     this.fillSheet(ws, expense, company);
+    // The template embeds the logo as an (unanchored) media part; anchor it so it
+    // actually renders in the header.
+    if (workbookMedia(wb).length > 0) ws.addImage(0, LOGO_ANCHOR);
 
     const buffer = Buffer.from(await wb.xlsx.writeBuffer());
     return { buffer, recordNumber: expense.recordNumber };
@@ -128,6 +140,10 @@ export class ExpenseVoucherService {
     const company = await this.companyName();
     const wb = new ExcelJS.Workbook();
     const used = new Set<string>();
+    // Images live at the workbook level and are dropped by copySheet (it only
+    // carries the sheet model), so register the logo once on the output workbook
+    // and re-anchor it on every copied sheet.
+    let logoId: number | undefined;
     for (const expense of expenses) {
       // Load a fresh template sheet for each voucher, then copy it in.
       const src = new ExcelJS.Workbook();
@@ -137,7 +153,12 @@ export class ExpenseVoucherService {
       const name = sheetName(expense, used);
       ws.name = name;
       this.fillSheet(ws, expense, company);
-      copySheet(wb, ws, name);
+      const media = workbookMedia(src);
+      if (logoId === undefined && media.length > 0) {
+        logoId = wb.addImage({ buffer: media[0].buffer, extension: 'png' });
+      }
+      const dst = copySheet(wb, ws, name);
+      if (logoId !== undefined) dst.addImage(logoId, LOGO_ANCHOR);
     }
     if (wb.worksheets.length === 0) wb.addWorksheet('Vouchers');
     wb.definedNames.model = [];
@@ -282,7 +303,7 @@ function copySheet(
   wb: ExcelJS.Workbook,
   src: ExcelJS.Worksheet,
   name: string,
-): void {
+): ExcelJS.Worksheet {
   const dst = wb.addWorksheet(name);
   const model = src.model as ExcelJS.Worksheet['model'] & { merges?: string[] };
   dst.model = { ...model, name, id: dst.id } as ExcelJS.Worksheet['model'];
@@ -294,6 +315,7 @@ function copySheet(
       /* already merged — ignore */
     }
   }
+  return dst;
 }
 
 /** Unique, Excel-safe sheet name (≤31 chars, no []:*?/\\). */
@@ -314,3 +336,8 @@ function sheetName(expense: ExpenseForVoucher, used: Set<string>): string {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 const num = (v: unknown): number => Number(v ?? 0);
+
+/** `Workbook.media` exists at runtime but is missing from ExcelJS's class typings. */
+function workbookMedia(wb: ExcelJS.Workbook): ExcelJS.Media[] {
+  return (wb as unknown as { media?: ExcelJS.Media[] }).media ?? [];
+}

@@ -176,8 +176,17 @@ export class ReportExportService {
 
     const header = (): void => {
       const y = doc.y;
-      doc.rect(PAGE_LEFT, y - 3, totalWidth, 17).fill(NAVY);
-      doc.fontSize(8).fillColor('#fff').font('Helvetica-Bold');
+      // Size the navy band to the tallest wrapped header so long multi-word
+      // labels aren't clipped. Measure with the header font active.
+      doc.fontSize(8).font('Helvetica-Bold');
+      const textHeight = columns.reduce(
+        (max, c, i) =>
+          Math.max(max, doc.heightOfString(c.header, { width: widths[i] - 8 })),
+        0,
+      );
+      const bandHeight = Math.max(17, Math.ceil(textHeight) + 6);
+      doc.rect(PAGE_LEFT, y - 3, totalWidth, bandHeight).fill(NAVY);
+      doc.fillColor('#fff');
       columns.forEach((c, i) => {
         doc.text(c.header, xs[i] + 4, y + 1, {
           width: widths[i] - 8,
@@ -185,7 +194,7 @@ export class ReportExportService {
         });
       });
       doc.font('Helvetica').fillColor('#000');
-      doc.y = y + 20;
+      doc.y = y - 3 + bandHeight + 3;
     };
 
     const cell = (value: unknown, format: ValueFormat | undefined): string =>
