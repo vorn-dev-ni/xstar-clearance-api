@@ -27,7 +27,10 @@ export class BondedSummaryExportService {
     private readonly bonded: BondedWarehouseService,
   ) {}
 
-  async export(filter: SummaryFilter, format: 'PDF' | 'EXCEL'): Promise<Buffer> {
+  async export(
+    filter: SummaryFilter,
+    format: 'PDF' | 'EXCEL',
+  ): Promise<Buffer> {
     const rows = await this.bonded.summary(filter);
     const document = await this.exporter.buildListDocument({
       title: 'STOCK MOVEMENT SUMMARY',
@@ -38,12 +41,41 @@ export class BondedSummaryExportService {
         { header: 'B/L No.', key: 'bl', width: 20 },
         { header: 'Invoice / Packing List Number', key: 'invoice', width: 22 },
         { header: 'Item Type / Description', key: 'itemType', width: 22 },
-        { header: 'Total Quantity Received (Units)', key: 'totalReceived', width: 12, format: 'number' },
-        { header: 'Quantity in Warehouse (Units)', key: 'inWarehouse', width: 12, format: 'number' },
-        { header: 'Quantity in Showroom (Units)', key: 'inShowroom', width: 12, format: 'number' },
-        { header: 'Quantity with Duty Paid (Units)', key: 'dutyPaid', width: 12, format: 'number' },
-        { header: 'Quantity with Duty Unpaid (Units)', key: 'dutyUnpaid', width: 12, format: 'number' },
-        { header: 'Number of Duty Suspension Days', key: 'suspensionDays', width: 12 },
+        {
+          header: 'Total Quantity Received (Units)',
+          key: 'totalReceived',
+          width: 12,
+          format: 'number',
+        },
+        {
+          header: 'Quantity in Warehouse (Units)',
+          key: 'inWarehouse',
+          width: 12,
+          format: 'number',
+        },
+        {
+          header: 'Quantity in Showroom (Units)',
+          key: 'inShowroom',
+          width: 12,
+          format: 'number',
+        },
+        {
+          header: 'Quantity with Duty Paid (Units)',
+          key: 'dutyPaid',
+          width: 12,
+          format: 'number',
+        },
+        {
+          header: 'Quantity with Duty Unpaid (Units)',
+          key: 'dutyUnpaid',
+          width: 12,
+          format: 'number',
+        },
+        {
+          header: 'Number of Duty Suspension Days',
+          key: 'suspensionDays',
+          width: 12,
+        },
       ],
       rows: rows.map((r) => ({
         date: formatDate(r.receivedDate),

@@ -256,7 +256,10 @@ export class CreateClearanceJobDto {
   @IsString()
   vesselVoyage?: string;
 
-  @ApiPropertyOptional({ example: 'FCL', description: 'Free-text container type' })
+  @ApiPropertyOptional({
+    example: 'FCL',
+    description: 'Free-text container type',
+  })
   @IsOptional()
   @IsString()
   containerType?: string;

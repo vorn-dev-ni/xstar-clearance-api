@@ -98,12 +98,17 @@ export class ShipmentHeaderDto {
   @IsISO8601()
   inboundDate?: string;
 
-  @ApiPropertyOptional({ example: '2026-01-15', description: 'Release / outbound date' })
+  @ApiPropertyOptional({
+    example: '2026-01-15',
+    description: 'Release / outbound date',
+  })
   @IsOptional()
   @IsISO8601()
   outboundDate?: string;
 
-  @ApiPropertyOptional({ description: 'WarehouseLocation id all items land in' })
+  @ApiPropertyOptional({
+    description: 'WarehouseLocation id all items land in',
+  })
   @IsOptional()
   @IsString()
   currentLocationId?: string;

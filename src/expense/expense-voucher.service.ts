@@ -1,18 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import * as path from 'path';
-import { DEFAULT_COMPANY_NAME } from '../common/company.constants';
+import { COMPANY_NAME_EN, COMPANY_NAME_KM } from '../common/company.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { amountToWords } from './amount-to-words';
 
 const TEMPLATE = path.join(__dirname, 'templates', 'payment-voucher.xlsx');
 
 // Company logo/brand emblem, anchored top-left of the voucher header (above the
-// "PAYMENT VOUCHER / 付款凭证" title). The 867×807 source is drawn ~square, sized to
-// the column-A header band. `oneCell` pins it so inserted item rows never move it.
+// "PAYMENT VOUCHER / 付款凭证" title). Sized to match the official voucher exactly:
+// 106×97 px (≈1008977×928163 EMU), spanning the A1:A2 header band within column A.
+// `oneCell` pins it so inserted item rows never move it.
 const LOGO_ANCHOR = {
   tl: { col: 0, row: 0 },
-  ext: { width: 70, height: 65 },
+  ext: { width: 106, height: 97 },
   editAs: 'oneCell' as const,
 };
 
@@ -79,8 +80,18 @@ type ExpenseForVoucher = {
 };
 
 const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /** Format as DD-MMM-YY, e.g. 27-Aug-25 (matches the template). */
@@ -119,14 +130,13 @@ export class ExpenseVoucherService {
       },
     })) as ExpenseForVoucher | null;
     if (!expense) throw new NotFoundException('Expense record not found');
-    const company = await this.companyName();
 
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.readFile(TEMPLATE);
     wb.definedNames.model = [];
     const ws = wb.worksheets[0];
     ws.name = sheetName(expense, new Set());
-    this.fillSheet(ws, expense, company);
+    this.fillSheet(ws, expense);
     // The template embeds the logo as an (unanchored) media part; anchor it so it
     // actually renders in the header.
     if (workbookMedia(wb).length > 0) ws.addImage(0, LOGO_ANCHOR);
@@ -137,7 +147,6 @@ export class ExpenseVoucherService {
 
   /** Many expenses → one workbook with a voucher sheet per expense. */
   async vouchersWorkbook(expenses: ExpenseForVoucher[]): Promise<Buffer> {
-    const company = await this.companyName();
     const wb = new ExcelJS.Workbook();
     const used = new Set<string>();
     // Images live at the workbook level and are dropped by copySheet (it only
@@ -152,7 +161,7 @@ export class ExpenseVoucherService {
       const ws = src.worksheets[0];
       const name = sheetName(expense, used);
       ws.name = name;
-      this.fillSheet(ws, expense, company);
+      this.fillSheet(ws, expense);
       const media = workbookMedia(src);
       if (logoId === undefined && media.length > 0) {
         logoId = wb.addImage({ buffer: media[0].buffer, extension: 'png' });
@@ -165,18 +174,7 @@ export class ExpenseVoucherService {
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
-  private async companyName(): Promise<string> {
-    const company = await this.prisma.companySettings.findFirst({
-      select: { companyNameEn: true },
-    });
-    return company?.companyNameEn ?? DEFAULT_COMPANY_NAME;
-  }
-
-  private fillSheet(
-    ws: ExcelJS.Worksheet,
-    expense: ExpenseForVoucher,
-    company: string,
-  ): void {
+  private fillSheet(ws: ExcelJS.Worksheet, expense: ExpenseForVoucher): void {
     const items = voucherItems(expense);
     const extra = Math.max(0, items.length - TEMPLATE_ITEM_ROWS);
     if (extra > 0) insertItemRows(ws, items.length, extra);
@@ -187,8 +185,22 @@ export class ExpenseVoucherService {
     const cashAdvance = num(expense.cashAdvance);
     const payable = round2(subtotal - cashAdvance);
 
+    // Bilingual company header — matches the official voucher exactly:
+    // row 1 Khmer (navy), row 2 English (bold), both centered across A:I.
+    ws.mergeCells('A1:I1');
+    ws.mergeCells('A2:I2');
+    const km = ws.getCell('A1');
+    km.value = COMPANY_NAME_KM;
+    km.font = { name: 'Khmer MEF2', size: 22, color: { argb: 'FF002060' } };
+    km.alignment = { horizontal: 'center', vertical: 'middle' };
+    const en = ws.getCell('A2');
+    en.value = COMPANY_NAME_EN;
+    en.font = { name: 'Calibri', size: 22, bold: true };
+    en.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 51;
+    ws.getRow(2).height = 37.75;
+
     // Header
-    ws.getCell('A1').value = company;
     ws.getCell('B4').value = payee;
     ws.getCell('I4').value = expense.recordNumber;
     ws.getCell('B5').value = expense.purpose ?? '';
@@ -207,7 +219,8 @@ export class ExpenseVoucherService {
     });
 
     // Note + totals (shift down past inserted rows)
-    if (expense.note) ws.getCell(`A${at(NOTE_ROW)}`).value = `Note: ${expense.note}`;
+    if (expense.note)
+      ws.getCell(`A${at(NOTE_ROW)}`).value = `Note: ${expense.note}`;
     ws.getCell(`I${at(SUBTOTAL_ROW)}`).value = subtotal;
     ws.getCell(`I${at(CASH_ADVANCE_ROW)}`).value = cashAdvance;
     ws.getCell(`I${at(PAYABLE_ROW)}`).value = payable;
@@ -306,7 +319,7 @@ function copySheet(
 ): ExcelJS.Worksheet {
   const dst = wb.addWorksheet(name);
   const model = src.model as ExcelJS.Worksheet['model'] & { merges?: string[] };
-  dst.model = { ...model, name, id: dst.id } as ExcelJS.Worksheet['model'];
+  dst.model = { ...model, name, id: dst.id };
   dst.name = name;
   for (const range of model.merges ?? []) {
     try {

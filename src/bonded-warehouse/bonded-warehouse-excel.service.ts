@@ -228,10 +228,7 @@ function dayCount(item: Record<string, unknown>): number | null {
   if (!inbound) return null;
   const start = new Date(inbound);
   if (Number.isNaN(start.getTime())) return null;
-  return Math.max(
-    0,
-    Math.floor((Date.now() - start.getTime()) / 86_400_000),
-  );
+  return Math.max(0, Math.floor((Date.now() - start.getTime()) / 86_400_000));
 }
 
 function normalize(s: string): string {
