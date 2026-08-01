@@ -19,6 +19,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { ContainerDto } from '../../clearance-plans/dto/container.dto';
 
 export class BillRecordItemDto {
   @ApiPropertyOptional()
@@ -364,6 +365,16 @@ export class CreateClearanceJobDto {
   @ValidateNested({ each: true })
   @Type(() => BillExpenseItemDto)
   expenseItems?: BillExpenseItemDto[];
+
+  @ApiPropertyOptional({
+    type: [ContainerDto],
+    description: "Container rows shared with the shipment's clearance plan",
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ContainerDto)
+  containers?: ContainerDto[];
 
   @ApiPropertyOptional({ description: 'Read-only job ID if passed by client' })
   @IsOptional()

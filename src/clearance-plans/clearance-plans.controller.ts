@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import { ExportClearancePlansDto } from './dto/export-clearance-plans.dto';
 import { ListClearancePlansDto } from './dto/list-clearance-plans.dto';
 import { UpdateClearancePlanDto } from './dto/update-clearance-plan.dto';
 import { UpdateClearancePlanStatusDto } from './dto/update-clearance-plan-status.dto';
+import { SyncJobContainersDto } from './dto/sync-job-containers.dto';
 import { ClearancePlansExportService } from './clearance-plans-export.service';
 import { ClearancePlansService } from './clearance-plans.service';
 
@@ -42,6 +44,17 @@ export class ClearancePlansController {
   @Get()
   findAll(@Query() query: ListClearancePlansDto) {
     return this.plans.findAll(query);
+  }
+
+  // Bulk-replace a shipment's container rows (Clearance Plan page, job-select flow).
+  @Put('by-job/:jobId')
+  @RequirePermission('operation.edit')
+  syncForJob(
+    @Param('jobId') jobId: string,
+    @Body() dto: SyncJobContainersDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.plans.syncForJob(jobId, dto.containers, user.userId);
   }
 
   // Declared before ':id' so '/clearance-plans/export' isn't routed to findOne.

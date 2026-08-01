@@ -14,6 +14,8 @@ import {
 } from './dto/create-clearance-job.dto';
 import { ListClearanceJobsDto } from './dto/list-clearance-jobs.dto';
 import { UpdateClearanceJobDto } from './dto/update-clearance-job.dto';
+import { syncJobContainers } from '../clearance-plans/container-sync';
+import { ContainerDto } from '../clearance-plans/dto/container.dto';
 
 @Injectable()
 export class OperationsService {
@@ -26,6 +28,7 @@ export class OperationsService {
     const {
       recordItems,
       expenseItems,
+      containers,
       id: _id,
       createdAt: _createdAt,
       updatedAt: _updatedAt,
@@ -56,7 +59,7 @@ export class OperationsService {
           }
         }
 
-        return tx.clearanceJob.create({
+        const created = await tx.clearanceJob.create({
           data: {
             ...rest,
             assignedStaff: assignedStaffName,
@@ -72,6 +75,15 @@ export class OperationsService {
             ...itemWrites(recordItems, expenseItems),
           } as Prisma.ClearanceJobUncheckedCreateInput,
         });
+        if (containers !== undefined) {
+          await syncJobContainers(
+            tx,
+            created.id,
+            containers as ContainerDto[],
+            userId,
+          );
+        }
+        return created;
       });
       await this.audit.log({
         userId,
@@ -156,6 +168,9 @@ export class OperationsService {
         incomeRecord: true,
         recordItems: { orderBy: { itemNumber: 'asc' } },
         expenseItems: { orderBy: { itemNumber: 'asc' } },
+        clearancePlans: {
+          orderBy: [{ blNumber: 'asc' }, { createdAt: 'asc' }],
+        },
         ...(canViewAccounting
           ? {
               expenses: {
@@ -242,6 +257,7 @@ export class OperationsService {
     const {
       recordItems,
       expenseItems,
+      containers,
       id: _id,
       jobNumber: _jobNumber,
       createdAt: _createdAt,
@@ -269,37 +285,45 @@ export class OperationsService {
     }
 
     try {
-      const updated = await this.prisma.clearanceJob.update({
-        where: { id },
-        data: {
-          ...rest,
-          ...blWrites(dto),
-          ...(assignedStaffName !== undefined
-            ? { assignedStaff: assignedStaffName }
-            : {}),
-          ...(dto.date ? { date: new Date(dto.date) } : {}),
-          ...(dto.eta ? { eta: new Date(dto.eta) } : {}),
-          ...(dto.issueClearanceDate
-            ? { issueClearanceDate: new Date(dto.issueClearanceDate) }
-            : {}),
-          // Array provided (even empty) → full replace of the inline rows.
-          ...(recordItems !== undefined
-            ? {
-                recordItems: {
-                  deleteMany: {},
-                  create: recordItems.map(withComputedAmount),
-                },
-              }
-            : {}),
-          ...(expenseItems !== undefined
-            ? {
-                expenseItems: {
-                  deleteMany: {},
-                  create: expenseItems.map(cleanExpenseItem),
-                },
-              }
-            : {}),
-        },
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const job = await tx.clearanceJob.update({
+          where: { id },
+          data: {
+            ...rest,
+            ...blWrites(dto),
+            ...(assignedStaffName !== undefined
+              ? { assignedStaff: assignedStaffName }
+              : {}),
+            ...(dto.date ? { date: new Date(dto.date) } : {}),
+            ...(dto.eta ? { eta: new Date(dto.eta) } : {}),
+            ...(dto.issueClearanceDate
+              ? { issueClearanceDate: new Date(dto.issueClearanceDate) }
+              : {}),
+            // Array provided (even empty) → full replace of the inline rows.
+            ...(recordItems !== undefined
+              ? {
+                  recordItems: {
+                    deleteMany: {},
+                    create: recordItems.map(withComputedAmount),
+                  },
+                }
+              : {}),
+            ...(expenseItems !== undefined
+              ? {
+                  expenseItems: {
+                    deleteMany: {},
+                    create: expenseItems.map(cleanExpenseItem),
+                  },
+                }
+              : {}),
+          },
+        });
+        // Container rows preserve status/history → sync (upsert/delete) rather
+        // than delete-all + recreate.
+        if (containers !== undefined) {
+          await syncJobContainers(tx, id, containers as ContainerDto[], userId);
+        }
+        return job;
       });
       await this.audit.log({
         userId,

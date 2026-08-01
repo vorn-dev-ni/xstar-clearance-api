@@ -37,6 +37,7 @@ function build(expenses: unknown[], incomes: unknown[]) {
     },
     expenseRecord: { findMany: jest.fn().mockResolvedValue(expenses) },
     incomeRecord: { findMany: jest.fn().mockResolvedValue(incomes) },
+    deposit: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn((arr: Promise<unknown>[]) => Promise.all(arr)),
   };
   const service = new CostingService(

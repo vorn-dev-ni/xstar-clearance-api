@@ -156,6 +156,78 @@ export class DepositsService {
     return deposit;
   }
 
+  /**
+   * Reconcile the tracking container deposit for a source cost line / expense.
+   * Called after an expense (BL-costing cost line or job-tagged voucher) is
+   * created or edited, so the deposit tracker always mirrors the cost line:
+   *  - amount > 0, none yet → create a tracking-only deposit (via createForCostLine)
+   *  - amount > 0, one exists → update its amount/date/shipping line/volume
+   *  - amount <= 0, one exists → delete it (unless already refunded)
+   * A refunded deposit is terminal, so its amount is never mutated or removed here.
+   */
+  async syncForCostLine(
+    params: {
+      sourceExpenseId: string;
+      clearanceJobId: string;
+      depositDate: string;
+      amount: number;
+      shippingLine?: string;
+      volume?: number;
+    },
+    userId: string,
+  ) {
+    const existing = await this.prisma.deposit.findFirst({
+      where: { sourceExpenseId: params.sourceExpenseId },
+    });
+    const amount = params.amount ?? 0;
+
+    if (amount > 0) {
+      if (!existing) {
+        return this.createForCostLine(params, userId);
+      }
+      // Refunded deposits are locked — leave them exactly as they are.
+      if (existing.status === ContainerDepositStatus.DEPOSIT_REFUNDED) {
+        return existing;
+      }
+      const updated = await this.prisma.deposit.update({
+        where: { id: existing.id },
+        data: {
+          amount,
+          depositDate: new Date(params.depositDate),
+          shippingLine: params.shippingLine,
+          volume: params.volume,
+        },
+        include: depositInclude,
+      });
+      await this.audit.log({
+        userId,
+        entityType: 'Deposit',
+        entityId: updated.id,
+        action: AuditAction.UPDATE,
+        before: { amount: Number(existing.amount) },
+        after: { amount: Number(updated.amount) },
+      });
+      return updated;
+    }
+
+    // Deposit cleared to zero → remove the tracking record, unless it already
+    // completed its refund lifecycle (kept for the audit trail).
+    if (
+      existing &&
+      existing.status !== ContainerDepositStatus.DEPOSIT_REFUNDED
+    ) {
+      await this.prisma.deposit.delete({ where: { id: existing.id } });
+      await this.audit.log({
+        userId,
+        entityType: 'Deposit',
+        entityId: existing.id,
+        action: AuditAction.DELETE,
+        before: { amount: Number(existing.amount) },
+      });
+    }
+    return null;
+  }
+
   async findAll(query: ListDepositsDto) {
     const where = buildWhere(query);
     const { skip, take } = toSkipTake(query.page, query.limit);

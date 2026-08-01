@@ -1,16 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsISO8601, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
-export class CreateClearancePlanDto {
-  @ApiProperty({
-    description:
-      'Linked Shipment (ClearanceJob) id — the Bill of Loading source',
-  })
+/**
+ * One container row shared by a Shipment (ClearanceJob) and its Clearance Plan.
+ * `id` is present for existing rows (update) and absent for new ones (create).
+ */
+export class ContainerDto {
+  @ApiPropertyOptional({ description: 'Existing ClearancePlan id (update)' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  clearanceJobId!: string;
+  id?: string;
 
-  @ApiProperty({ description: 'Container number' })
+  @ApiProperty({ description: 'Container / truck number' })
   @IsString()
   @IsNotEmpty()
   container!: string;
@@ -19,11 +20,6 @@ export class CreateClearancePlanDto {
   @IsOptional()
   @IsString()
   blNumber?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  consignee?: string;
 
   @ApiPropertyOptional({ description: 'Size / Volume', example: "40'" })
   @IsOptional()
@@ -38,19 +34,22 @@ export class CreateClearancePlanDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  seal?: string;
+  commodity?: string;
 
-  @ApiPropertyOptional({
-    description: 'Commodity (the sheet\'s "COMMUNITY" column)',
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  commodity?: string;
+  seal?: string;
 
   @ApiPropertyOptional({ example: 'TEC' })
   @IsOptional()
   @IsString()
   port?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  consignee?: string;
 
   @ApiPropertyOptional({ example: '2026-05-02' })
   @IsOptional()

@@ -21,7 +21,9 @@ export class ExpenseItemDto {
   @IsInt()
   itemNumber!: number;
 
-  @ApiPropertyOptional({ description: 'Legacy A/C code text (superseded by accountId)' })
+  @ApiPropertyOptional({
+    description: 'Legacy A/C code text (superseded by accountId)',
+  })
   @IsOptional()
   @IsString()
   acCode?: string;
@@ -106,7 +108,8 @@ export class CreateExpenseDto {
   currency?: string;
 
   @ApiPropertyOptional({
-    description: 'Legacy header-level expense account; accounts now live per line item',
+    description:
+      'Legacy header-level expense account; accounts now live per line item',
   })
   @IsOptional()
   @IsString()
@@ -130,6 +133,22 @@ export class CreateExpenseDto {
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   deposit?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Shipping line for the linked container deposit (used when deposit > 0)',
+  })
+  @IsOptional()
+  @IsString()
+  shippingLine?: string;
+
+  @ApiPropertyOptional({
+    description: 'Container count (VOL) for the linked container deposit',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  volume?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

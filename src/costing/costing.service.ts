@@ -7,7 +7,6 @@ import { AuditAction, Prisma, TransactionStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { ACCOUNT_CODES } from '../common/accounting.constants';
 import { paginationMeta, toSkipTake } from '../common/pagination';
-import { DepositsService } from '../deposits/deposits.service';
 import { ExpenseService } from '../expense/expense.service';
 import { IncomeService } from '../income/income.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -43,7 +42,6 @@ export class CostingService {
     private readonly expense: ExpenseService,
     private readonly income: IncomeService,
     private readonly audit: AuditService,
-    private readonly deposits: DepositsService,
   ) {}
 
   /** List B/Ls (clearance jobs) with cost/income/profit roll-ups. */
@@ -151,7 +149,10 @@ export class CostingService {
     const [expenses, incomes] = await this.prisma.$transaction([
       this.prisma.expenseRecord.findMany({
         where: { clearanceJobId: jobId },
-        include: { supplier: { select: { nameEn: true } } },
+        include: {
+          supplier: { select: { nameEn: true } },
+          account: { select: { code: true } },
+        },
         orderBy: { recordDate: 'asc' },
       }),
       this.prisma.incomeRecord.findMany({
@@ -160,6 +161,28 @@ export class CostingService {
       }),
     ]);
 
+    // Pull the linked container deposits so the edit dialog can preload each
+    // cost line's shipping line / volume without a second round trip.
+    const depositBySource = new Map<
+      string,
+      { shippingLine: string | null; volume: number | null }
+    >();
+    const expenseIds = expenses.map((e) => e.id);
+    if (expenseIds.length) {
+      const deposits = await this.prisma.deposit.findMany({
+        where: { sourceExpenseId: { in: expenseIds } },
+        select: { sourceExpenseId: true, shippingLine: true, volume: true },
+      });
+      for (const d of deposits) {
+        if (d.sourceExpenseId) {
+          depositBySource.set(d.sourceExpenseId, {
+            shippingLine: d.shippingLine,
+            volume: d.volume,
+          });
+        }
+      }
+    }
+
     const costLines = expenses.map((e) => ({
       id: e.id,
       recordNumber: e.recordNumber,
@@ -167,9 +190,13 @@ export class CostingService {
       payeeName: e.supplierName ?? e.supplier?.nameEn ?? null,
       invoiceNumber: e.invoiceNumber,
       description: e.description,
+      accountId: e.accountId,
+      accountCode: e.account?.code ?? null,
       amount: Number(e.amount),
       tax: Number(e.taxAmount ?? 0),
       deposit: Number(e.deposit ?? 0),
+      shippingLine: depositBySource.get(e.id)?.shippingLine ?? null,
+      volume: depositBySource.get(e.id)?.volume ?? null,
       actualCost: round2(rowActualCost(e)),
       notes: e.notes,
       status: e.status,
@@ -210,8 +237,14 @@ export class CostingService {
 
   async addCostLine(jobId: string, dto: CreateCostLineDto, userId: string) {
     await this.requireJob(jobId);
-    const accountId = await this.accountIdByCode(ACCOUNT_CODES.COSTING_EXPENSE);
-    const created = await this.expense.create(
+    // Each cost line may target its own expense account (like a bill line item);
+    // fall back to the default costing-expense account when none is chosen.
+    const accountId = dto.accountId
+      ? await this.requireAccount(dto.accountId)
+      : await this.accountIdByCode(ACCOUNT_CODES.COSTING_EXPENSE);
+    // ExpenseService.create mirrors any deposit into the shipment's container
+    // deposit tracker (by clearance job), so no separate deposit call here.
+    return this.expense.create(
       {
         recordDate: dto.date,
         description: dto.description,
@@ -222,30 +255,21 @@ export class CostingService {
         accountId,
         taxAmount: dto.tax,
         deposit: dto.deposit,
+        shippingLine: dto.shippingLine,
+        volume: dto.volume,
         invoiceNumber: dto.invoiceNumber,
         notes: dto.notes,
       },
       userId,
     );
-    // A deposit on the cost line spins up a linked (tracking-only) container
-    // deposit for the shipment's B/L, managed through the refund status stepper.
-    if (dto.deposit && dto.deposit > 0) {
-      await this.deposits.createForCostLine(
-        {
-          clearanceJobId: jobId,
-          depositDate: dto.date,
-          amount: dto.deposit,
-          shippingLine: dto.shippingLine,
-          volume: dto.volume,
-          sourceExpenseId: created.id,
-        },
-        userId,
-      );
-    }
-    return created;
   }
 
-  updateCostLine(id: string, dto: UpdateCostLineDto, userId: string) {
+  async updateCostLine(id: string, dto: UpdateCostLineDto, userId: string) {
+    // Forwarding deposit + shipping line/volume lets ExpenseService.update
+    // reconcile the linked container deposit (create/update/remove) on edit.
+    const accountId = dto.accountId
+      ? await this.requireAccount(dto.accountId)
+      : undefined;
     return this.expense.update(
       id,
       {
@@ -253,8 +277,11 @@ export class CostingService {
         description: dto.description,
         supplierName: dto.payeeName,
         amount: dto.amount,
+        accountId,
         taxAmount: dto.tax,
         deposit: dto.deposit,
+        shippingLine: dto.shippingLine,
+        volume: dto.volume,
         invoiceNumber: dto.invoiceNumber,
         notes: dto.notes,
       },
@@ -364,6 +391,18 @@ export class CostingService {
       throw new UnprocessableEntityException(
         `Default account ${code} is not configured in the chart of accounts`,
       );
+    }
+    return account.id;
+  }
+
+  /** Validate a chosen expense account exists and return its id. */
+  private async requireAccount(accountId: string): Promise<string> {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: { id: true },
+    });
+    if (!account) {
+      throw new UnprocessableEntityException('Selected account does not exist');
     }
     return account.id;
   }

@@ -1,4 +1,5 @@
 import type { AuditService } from '../audit/audit.service';
+import type { DepositsService } from '../deposits/deposits.service';
 import type { JournalService } from '../journal/journal.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import { ExpenseService } from './expense.service';
@@ -25,12 +26,14 @@ function build() {
     },
   };
   const audit = { log: jest.fn().mockResolvedValue(undefined) };
+  const deposits = { syncForCostLine: jest.fn().mockResolvedValue(null) };
   const service = new ExpenseService(
     prisma as unknown as PrismaService,
     {} as JournalService,
     audit as unknown as AuditService,
+    deposits as unknown as DepositsService,
   );
-  return { service, created };
+  return { service, created, deposits };
 }
 
 describe('ExpenseService.create', () => {

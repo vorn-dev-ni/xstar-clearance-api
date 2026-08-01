@@ -16,6 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import { ACCOUNT_CODES } from '../common/accounting.constants';
 import { monthYearRange } from '../common/date-range';
 import { paginationMeta, toSkipTake } from '../common/pagination';
+import { DepositsService } from '../deposits/deposits.service';
 import { JournalService } from '../journal/journal.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -30,6 +31,7 @@ export class ExpenseService {
     private readonly prisma: PrismaService,
     private readonly journal: JournalService,
     private readonly audit: AuditService,
+    private readonly deposits: DepositsService,
   ) {}
 
   /** Validate the expenseType code exists and is active (accounting-managed config). */
@@ -107,6 +109,14 @@ export class ExpenseService {
       action: AuditAction.CREATE,
       after: { amount: Number(record.amount) },
     });
+    // Keep the shipment's container-deposit tracker in step with this expense.
+    await this.reconcileJobDeposit(
+      record,
+      dto.deposit ?? 0,
+      dto.shippingLine,
+      dto.volume,
+      userId,
+    );
     return {
       id: record.id,
       recordNumber: record.recordNumber,
@@ -114,6 +124,32 @@ export class ExpenseService {
       approvalStatus: record.approvalStatus,
       createdAt: record.createdAt,
     };
+  }
+
+  /**
+   * Mirror an expense's deposit into the shipment's container-deposit tracker.
+   * Only job-tagged expenses (BL-costing cost lines or vouchers linked to a
+   * shipment) participate — matched purely by clearance job, no B/L required.
+   */
+  private async reconcileJobDeposit(
+    record: { id: string; clearanceJobId: string | null; recordDate: Date },
+    deposit: number,
+    shippingLine: string | undefined,
+    volume: number | undefined,
+    userId: string,
+  ) {
+    if (!record.clearanceJobId) return;
+    await this.deposits.syncForCostLine(
+      {
+        sourceExpenseId: record.id,
+        clearanceJobId: record.clearanceJobId,
+        depositDate: record.recordDate.toISOString(),
+        amount: deposit,
+        shippingLine,
+        volume,
+      },
+      userId,
+    );
   }
 
   private buildWhere(query: ListExpensesDto): Prisma.ExpenseRecordWhereInput {
@@ -229,7 +265,10 @@ export class ExpenseService {
       },
     });
     if (!record) throw new NotFoundException('Expense record not found');
-    return { ...record, ...paymentSummary(record.amount, record.vendorPayments) };
+    return {
+      ...record,
+      ...paymentSummary(record.amount, record.vendorPayments),
+    };
   }
 
   async update(id: string, dto: UpdateExpenseDto, userId: string) {
@@ -241,8 +280,10 @@ export class ExpenseService {
     }
     if (dto.expenseType) await this.assertExpenseType(dto.expenseType);
     // `items` is a nested relation, not a scalar column — pull it out of the
-    // spread and apply it as a replace-all below.
-    const { items, recordDate, amount: _amount, ...rest } = dto;
+    // spread and apply it as a replace-all below. `shippingLine`/`volume` are
+    // not ExpenseRecord columns either; they flow to the linked deposit. The
+    // recomputed `amount` below overrides any value left in `...rest`.
+    const { items, recordDate, shippingLine, volume, ...rest } = dto;
     // Recompute tax + actual cost from the merged (existing + patch) values so
     // the B/L costing total stays consistent: actualCost = amount + tax − deposit.
     const amount = items?.length
@@ -293,6 +334,15 @@ export class ExpenseService {
       before: { amount: Number(existing.amount) },
       after: { amount: Number(updated.amount) },
     });
+    // Re-sync the linked container deposit (create / update / remove) so editing
+    // a cost line or job-tagged voucher never leaves a stale deposit behind.
+    await this.reconcileJobDeposit(
+      updated,
+      deposit ?? 0,
+      shippingLine,
+      volume,
+      userId,
+    );
     return updated;
   }
 
@@ -651,9 +701,7 @@ function paymentSummary(
   payments: { amount: Prisma.Decimal | number }[],
 ): { amountPaid: number; balanceDue: number; paymentStatus: string } {
   const total = round2(Number(amount));
-  const amountPaid = round2(
-    payments.reduce((s, p) => s + Number(p.amount), 0),
-  );
+  const amountPaid = round2(payments.reduce((s, p) => s + Number(p.amount), 0));
   const balanceDue = round2(total - amountPaid);
   const paymentStatus =
     amountPaid <= 0 ? 'UNPAID' : balanceDue <= 0 ? 'PAID' : 'PARTIAL';

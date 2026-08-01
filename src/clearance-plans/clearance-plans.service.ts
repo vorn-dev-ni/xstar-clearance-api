@@ -11,6 +11,8 @@ import { paginationMeta, toSkipTake } from '../common/pagination';
 import { CreateClearancePlanDto } from './dto/create-clearance-plan.dto';
 import { UpdateClearancePlanDto } from './dto/update-clearance-plan.dto';
 import { ListClearancePlansDto } from './dto/list-clearance-plans.dto';
+import { ContainerDto } from './dto/container.dto';
+import { syncJobContainers } from './container-sync';
 
 const planInclude = {
   clearanceJob: { select: { jobNumber: true, blBookingNumber: true } },
@@ -39,20 +41,6 @@ export class ClearancePlansService {
       select: { id: true },
     });
     if (!job) throw new BadRequestException('Linked shipment not found');
-  }
-
-  /** A shipment may be linked to at most one clearance plan. */
-  private async assertNoDuplicatePlan(clearanceJobId: string, exceptId?: string) {
-    const existing = await this.prisma.clearancePlan.findFirst({
-      where: {
-        clearanceJobId,
-        ...(exceptId ? { id: { not: exceptId } } : {}),
-      },
-      select: { id: true },
-    });
-    if (existing) {
-      throw new ConflictException('This shipment already has a clearance plan');
-    }
   }
 
   private buildWhere(
@@ -91,13 +79,14 @@ export class ClearancePlansService {
 
   async create(dto: CreateClearancePlanDto, userId: string) {
     await this.assertJob(dto.clearanceJobId);
-    await this.assertNoDuplicatePlan(dto.clearanceJobId);
     return this.prisma.clearancePlan.create({
       data: {
         clearanceJobId: dto.clearanceJobId,
         container: dto.container,
+        blNumber: dto.blNumber,
         consignee: dto.consignee,
         size: dto.size,
+        containerType: dto.containerType,
         seal: dto.seal,
         commodity: dto.commodity,
         port: dto.port,
@@ -109,6 +98,23 @@ export class ClearancePlansService {
       },
       include: planInclude,
     });
+  }
+
+  /**
+   * Bulk-replace a job's container rows (used by the Clearance Plan page after a
+   * shipment is selected). Same shared sync as the Shipment form: existing rows
+   * are updated, new ones created, removed ones deleted — statuses preserved.
+   */
+  async syncForJob(
+    clearanceJobId: string,
+    containers: ContainerDto[],
+    userId: string,
+  ) {
+    await this.assertJob(clearanceJobId);
+    await this.prisma.$transaction((tx) =>
+      syncJobContainers(tx, clearanceJobId, containers, userId),
+    );
+    return this.findAll({ clearanceJobId } as ListClearancePlansDto);
   }
 
   async findAll(query: ListClearancePlansDto) {
@@ -132,7 +138,12 @@ export class ClearancePlansService {
     return this.prisma.clearancePlan.findMany({
       where: this.buildWhere(query),
       include: planInclude,
-      orderBy: [{ clearanceDate: 'asc' }, { createdAt: 'asc' }],
+      // Group by shipment then B/L to mirror the CLEARANCE PLANS sheet layout.
+      orderBy: [
+        { clearanceJobId: 'asc' },
+        { blNumber: 'asc' },
+        { createdAt: 'asc' },
+      ],
       take: 1000,
     });
   }
@@ -150,7 +161,6 @@ export class ClearancePlansService {
     await this.findOne(id);
     if (dto.clearanceJobId) {
       await this.assertJob(dto.clearanceJobId);
-      await this.assertNoDuplicatePlan(dto.clearanceJobId, id);
     }
     return this.prisma.clearancePlan.update({
       where: { id },

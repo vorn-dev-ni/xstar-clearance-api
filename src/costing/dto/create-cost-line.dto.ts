@@ -31,6 +31,14 @@ export class CreateCostLineDto {
   @IsString()
   description!: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Expense account this cost line debits; defaults to the costing-expense account',
+  })
+  @IsOptional()
+  @IsString()
+  accountId?: string;
+
   @ApiProperty({ example: 545, description: 'Amount (金额)' })
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
