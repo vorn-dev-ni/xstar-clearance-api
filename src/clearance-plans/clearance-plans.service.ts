@@ -41,6 +41,20 @@ export class ClearancePlansService {
     if (!job) throw new BadRequestException('Linked shipment not found');
   }
 
+  /** A shipment may be linked to at most one clearance plan. */
+  private async assertNoDuplicatePlan(clearanceJobId: string, exceptId?: string) {
+    const existing = await this.prisma.clearancePlan.findFirst({
+      where: {
+        clearanceJobId,
+        ...(exceptId ? { id: { not: exceptId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('This shipment already has a clearance plan');
+    }
+  }
+
   private buildWhere(
     query: ListClearancePlansDto,
   ): Prisma.ClearancePlanWhereInput {
@@ -77,6 +91,7 @@ export class ClearancePlansService {
 
   async create(dto: CreateClearancePlanDto, userId: string) {
     await this.assertJob(dto.clearanceJobId);
+    await this.assertNoDuplicatePlan(dto.clearanceJobId);
     return this.prisma.clearancePlan.create({
       data: {
         clearanceJobId: dto.clearanceJobId,
@@ -133,7 +148,10 @@ export class ClearancePlansService {
 
   async update(id: string, dto: UpdateClearancePlanDto) {
     await this.findOne(id);
-    if (dto.clearanceJobId) await this.assertJob(dto.clearanceJobId);
+    if (dto.clearanceJobId) {
+      await this.assertJob(dto.clearanceJobId);
+      await this.assertNoDuplicatePlan(dto.clearanceJobId, id);
+    }
     return this.prisma.clearancePlan.update({
       where: { id },
       data: {

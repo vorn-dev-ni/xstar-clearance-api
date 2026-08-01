@@ -186,7 +186,7 @@ model ClearancePlan {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  @@index([clearanceJobId])
+  @@unique([clearanceJobId]) // a shipment may be linked to at most one clearance plan
   @@index([clearanceDate])
   @@index([status])
 }

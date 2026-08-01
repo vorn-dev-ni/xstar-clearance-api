@@ -23,7 +23,8 @@ export class ClearancePlansExportService {
         { header: 'Container', key: 'container', width: 16 },
         { header: 'Size', key: 'size', width: 8 },
         { header: 'Seal', key: 'seal', width: 16 },
-        { header: 'Bill of Loading', key: 'bl', width: 20 },
+        { header: 'BL', key: 'bl', width: 20 },
+        { header: 'Shipment (Job No.)', key: 'jobNo', width: 20 },
         { header: 'Commodity', key: 'commodity', width: 24 },
         { header: 'Port', key: 'port', width: 8 },
         { header: 'Clearance Date', key: 'clearanceDate', width: 14 },
@@ -35,6 +36,7 @@ export class ClearancePlansExportService {
         size: r.size ?? '',
         seal: r.seal ?? '',
         bl: r.clearanceJob?.blBookingNumber ?? '',
+        jobNo: r.clearanceJob?.jobNumber ?? '',
         commodity: r.commodity ?? '',
         port: r.port ?? '',
         clearanceDate: r.clearanceDate

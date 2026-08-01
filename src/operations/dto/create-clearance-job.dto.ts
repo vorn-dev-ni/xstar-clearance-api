@@ -161,7 +161,7 @@ export class CreateClearanceJobDto {
   @IsString()
   portClearance?: string;
 
-  @ApiPropertyOptional({ example: 'IMP' })
+  @ApiPropertyOptional({ example: 'IMP', description: 'IMP / EXP / REEXPORT' })
   @IsOptional()
   @IsString()
   transaction?: string;

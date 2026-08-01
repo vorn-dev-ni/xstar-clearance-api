@@ -414,7 +414,7 @@ function itemWrites(
   };
 }
 
-/** IMP/EXP prefix from the transaction field, else JOB; per-year sequence. */
+/** IMP/EXP/REEXPORT prefix from the transaction field, else JOB; per-year sequence. */
 async function nextJobNumber(
   tx: Pick<Prisma.TransactionClient, 'clearanceJob'>,
   transaction: string | undefined,
@@ -423,9 +423,11 @@ async function nextJobNumber(
   const t = transaction?.trim().toUpperCase() ?? '';
   const prefix = t.startsWith('IMP')
     ? 'IMP'
-    : t.startsWith('EXP')
-      ? 'EXP'
-      : 'JOB';
+    : t.startsWith('REEXPORT')
+      ? 'REEXPORT'
+      : t.startsWith('EXP')
+        ? 'EXP'
+        : 'JOB';
   const year = date.getUTCFullYear();
   const count = await tx.clearanceJob.count({
     where: { jobNumber: { startsWith: `${prefix}-${year}-` } },
