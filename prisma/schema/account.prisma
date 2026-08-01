@@ -24,6 +24,7 @@ model Account {
   journalLines       JournalEntryLine[]
   incomeRecords      IncomeRecord[]
   expenseRecords     ExpenseRecord[]
+  expenseItems       ExpenseItem[]
   deposits           Deposit[]
   bankPayments       Payment[]          @relation("PaymentBankAccount")
   bankVendorPayments VendorPayment[]    @relation("VendorPaymentBankAccount")

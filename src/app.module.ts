@@ -30,7 +30,6 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { TaxModule } from './tax/tax.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
-import { VendorPaymentsModule } from './vendor-payments/vendor-payments.module';
 import { WarehouseLocationsModule } from './warehouse-locations/warehouse-locations.module';
 
 @Module({
@@ -74,7 +73,6 @@ import { WarehouseLocationsModule } from './warehouse-locations/warehouse-locati
     PaymentsModule,
     UsersModule,
     OperationsModule,
-    VendorPaymentsModule,
     CostingModule,
     BondedWarehouseModule,
     WarehouseLocationsModule,

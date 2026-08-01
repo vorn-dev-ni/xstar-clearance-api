@@ -72,6 +72,7 @@ type ExpenseForVoucher = {
   items?: Array<{
     itemNumber: number;
     acCode: string | null;
+    account?: { code: string } | null;
     itemDate: Date | null;
     invoiceNumber: string | null;
     description: string;
@@ -126,7 +127,10 @@ export class ExpenseVoucherService {
       include: {
         supplier: { select: { nameEn: true } },
         account: { select: { code: true } },
-        items: { orderBy: { itemNumber: 'asc' } },
+        items: {
+          orderBy: { itemNumber: 'asc' },
+          include: { account: { select: { code: true } } },
+        },
       },
     })) as ExpenseForVoucher | null;
     if (!expense) throw new NotFoundException('Expense record not found');
@@ -249,7 +253,7 @@ function voucherItems(expense: ExpenseForVoucher): VoucherItem[] {
   if (expense.items?.length) {
     return expense.items.map((i) => ({
       itemNumber: i.itemNumber,
-      acCode: i.acCode,
+      acCode: i.account?.code ?? i.acCode,
       itemDate: i.itemDate,
       invoiceNumber: i.invoiceNumber,
       description: i.description,

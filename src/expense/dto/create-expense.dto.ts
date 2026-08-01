@@ -21,10 +21,15 @@ export class ExpenseItemDto {
   @IsInt()
   itemNumber!: number;
 
-  @ApiPropertyOptional({ description: 'Optional A/C code text on the voucher' })
+  @ApiPropertyOptional({ description: 'Legacy A/C code text (superseded by accountId)' })
   @IsOptional()
   @IsString()
   acCode?: string;
+
+  @ApiPropertyOptional({ description: 'Expense account id this line debits' })
+  @IsOptional()
+  @IsString()
+  accountId?: string;
 
   @ApiPropertyOptional({ example: '2025-08-27' })
   @IsOptional()
@@ -100,9 +105,12 @@ export class CreateExpenseDto {
   @IsString()
   currency?: string;
 
-  @ApiProperty({ description: 'Expense account id to debit' })
+  @ApiPropertyOptional({
+    description: 'Legacy header-level expense account; accounts now live per line item',
+  })
+  @IsOptional()
   @IsString()
-  accountId!: string;
+  accountId?: string;
 
   @ApiPropertyOptional({
     description: 'Tax percentage; taxAmount is computed from it',

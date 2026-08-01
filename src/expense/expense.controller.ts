@@ -19,6 +19,8 @@ import { ApproveExpenseDto, RejectExpenseDto } from './dto/approval.dto';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { ExportExpensesDto } from './dto/export-expenses.dto';
 import { ListExpensesDto } from './dto/list-expenses.dto';
+import { PayBillDto } from './dto/pay-bill.dto';
+import { PayBillsDto } from './dto/pay-bills.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { ExpenseExportService } from './expense-export.service';
 import { ExpenseVoucherService } from './expense-voucher.service';
@@ -97,6 +99,19 @@ export class ExpenseController {
     res.send(buffer);
   }
 
+  // Open payables for the Pay Bills checklist. Before ':id' path routes.
+  @Get('payables')
+  payables(@Query() query: ListExpensesDto) {
+    return this.expense.openPayables(query);
+  }
+
+  @Post('pay-bills')
+  @HttpCode(200)
+  @RequirePermission('accounting.edit')
+  payBills(@Body() dto: PayBillsDto, @CurrentUser() user: AuthUser) {
+    return this.expense.payBills(dto, user.userId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.expense.findOne(id);
@@ -132,5 +147,16 @@ export class ExpenseController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.expense.reject(id, user.userId, dto.rejectionReason);
+  }
+
+  @Post(':id/pay')
+  @HttpCode(200)
+  @RequirePermission('accounting.edit')
+  pay(
+    @Param('id') id: string,
+    @Body() dto: PayBillDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.expense.payBill(id, dto, user.userId);
   }
 }

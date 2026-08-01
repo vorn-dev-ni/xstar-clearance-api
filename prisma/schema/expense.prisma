@@ -24,9 +24,10 @@ model ExpenseRecord {
   deposit    Decimal? @db.Decimal(15, 2)
   actualCost Decimal? @db.Decimal(15, 2)
 
-  // Accounting
-  accountId String
-  account   Account           @relation(fields: [accountId], references: [id])
+  // Accounting — the expense account now lives per line item (ExpenseItem.accountId);
+  // this header-level account is kept optional for legacy/single-line callers.
+  accountId String?
+  account   Account?          @relation(fields: [accountId], references: [id])
   status    TransactionStatus @default(PENDING)
 
   // Invoice/PO reference
@@ -88,7 +89,9 @@ model ExpenseItem {
   expenseRecord   ExpenseRecord @relation(fields: [expenseRecordId], references: [id], onDelete: Cascade)
 
   itemNumber    Int
-  acCode        String? // Optional A/C code text shown on the voucher
+  acCode        String? // Legacy A/C code text (superseded by accountId)
+  accountId     String? // Expense account (chart of accounts) this line debits
+  account       Account?  @relation(fields: [accountId], references: [id])
   itemDate      DateTime? // Line date; defaults to the record date on the voucher
   invoiceNumber String?
   description   String
@@ -97,6 +100,7 @@ model ExpenseItem {
   createdAt DateTime @default(now())
 
   @@index([expenseRecordId])
+  @@index([accountId])
 }
 
 /// Accounting-managed expense types (CRUD). `code` is stored on

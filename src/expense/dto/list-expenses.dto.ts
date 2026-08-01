@@ -13,6 +13,13 @@ import {
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export class ListExpensesDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
+    description: 'Search record number, description, invoice or supplier',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @ApiPropertyOptional({ minimum: 1, maximum: 12 })
   @IsOptional()
   @Type(() => Number)
