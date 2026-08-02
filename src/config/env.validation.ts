@@ -45,6 +45,12 @@ export const envSchema = z.object({
   AWS_SECRET_ACCESS_KEY: z.string().min(1, 'AWS_SECRET_ACCESS_KEY is required'),
   // Lifetime (seconds) of generated presigned upload/download URLs.
   S3_PRESIGN_EXPIRY: z.coerce.number().int().positive().default(900),
+
+  // Telegram error alerts — pushes caught errors to a channel. When the token or
+  // chat id is unset, or alerts are disabled, sending is skipped (the app still boots).
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
+  TELEGRAM_ALERTS_ENABLED: z.stringbool().default(true),
 });
 
 export type Env = z.infer<typeof envSchema>;

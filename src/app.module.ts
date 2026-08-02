@@ -28,6 +28,7 @@ import { ReportsModule } from './reports/reports.module';
 import { SettingsModule } from './settings/settings.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { TaxModule } from './tax/tax.module';
+import { TelegramModule } from './telegram/telegram.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
 import { WarehouseLocationsModule } from './warehouse-locations/warehouse-locations.module';
@@ -53,6 +54,7 @@ import { WarehouseLocationsModule } from './warehouse-locations/warehouse-locati
       }),
     }),
     PrismaModule,
+    TelegramModule,
     CommonModule,
     AuthModule,
     HealthModule,

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { TelegramService } from '../../telegram/telegram.service';
 
 /** Maps HTTP status codes to the doc's error-code enum. */
 const CODE_BY_STATUS: Record<number, string> = {
@@ -33,6 +34,8 @@ interface FieldError {
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
+
+  constructor(private readonly telegram: TelegramService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -75,6 +78,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
       requestId,
       path: req.url,
     });
+
+    // Fire-and-forget alert for every caught error (no-op when alerts are off).
+    this.telegram.notifyError({
+      module:
+        exception instanceof Error ? exception.constructor.name : undefined,
+      filename: appStackFrame(exception),
+      error: exception,
+      context: { method: req.method, path: req.url, status, requestId },
+    });
   }
 
   /** Best-effort split of a class-validator message into `{ field, message }`. */
@@ -82,4 +94,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const field = message.split(' ')[0] ?? 'unknown';
     return { field, message };
   }
+}
+
+/** First stack frame that points into the app's own source, e.g. `foo.service.ts:42`. */
+function appStackFrame(exception: unknown): string | undefined {
+  if (!(exception instanceof Error) || !exception.stack) return undefined;
+  for (const line of exception.stack.split('\n')) {
+    const match = line.match(/\(?((?:src|dist)[^):]*\.[jt]s:\d+:\d+)\)?/);
+    if (match) {
+      // Return just the file + line:col, dropping directory noise.
+      return match[1].split('/').pop();
+    }
+  }
+  return undefined;
 }
