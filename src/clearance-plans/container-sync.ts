@@ -19,13 +19,22 @@ function toData(c: ContainerDto) {
   };
 }
 
+const normalizeContainer = (c: string) => c.trim().toLowerCase();
+
 /**
- * Syncs a job's container rows (ClearancePlan) to match `containers`:
- * rows with an `id` are updated, rows without one are created, and existing
- * rows whose id is absent from the payload are deleted. Unchanged rows keep
- * their `status` and history (unlike a delete-all + recreate). Must run inside
- * a transaction — pass the tx client. Rows with a blank container number are
- * skipped so empty trailing form rows don't persist.
+ * Syncs a job's container rows (ClearancePlan) to match `containers`. The sync is
+ * idempotent and scoped to the job: each incoming row is resolved to an existing
+ * row by its `id` (only when that id belongs to this job) or, failing that, by a
+ * case-insensitive match on its container number. Resolved rows are updated,
+ * unresolved ones are created, and existing rows no longer referenced are deleted.
+ * Unchanged rows keep their `status` and history (unlike a delete-all + recreate).
+ *
+ * Because container numbers are the per-row key, incoming rows are de-duplicated by
+ * number (last one wins) and a new row whose number already exists reuses that row
+ * — so a stale/foreign id can't 500 (no `update` on a missing id) and re-saves
+ * can't spawn duplicate plans. Must run inside a transaction — pass the tx client.
+ * Rows with a blank container number are skipped so empty trailing form rows don't
+ * persist.
  */
 export async function syncJobContainers(
   tx: Tx,
@@ -33,23 +42,41 @@ export async function syncJobContainers(
   containers: ContainerDto[],
   userId: string,
 ): Promise<void> {
-  const rows = containers.filter((c) => c.container?.trim());
+  // De-duplicate the payload by container number (last occurrence wins).
+  const byNumber = new Map<string, ContainerDto>();
+  for (const c of containers) {
+    if (c.container?.trim()) byNumber.set(normalizeContainer(c.container), c);
+  }
+  const rows = [...byNumber.values()];
 
   const existing = await tx.clearancePlan.findMany({
     where: { clearanceJobId },
-    select: { id: true },
+    select: { id: true, container: true },
   });
-  const keepIds = new Set(rows.map((c) => c.id).filter(Boolean));
-  const toDelete = existing.filter((e) => !keepIds.has(e.id)).map((e) => e.id);
+  const validIds = new Set(existing.map((e) => e.id));
+  const idByContainer = new Map(
+    existing.map((e) => [normalizeContainer(e.container), e.id]),
+  );
 
+  // Resolve each incoming row to the existing row it should update (if any).
+  const keepIds = new Set<string>();
+  const resolved = rows.map((c) => {
+    const targetId =
+      (c.id && validIds.has(c.id) ? c.id : undefined) ??
+      idByContainer.get(normalizeContainer(c.container));
+    if (targetId) keepIds.add(targetId);
+    return { c, targetId };
+  });
+
+  const toDelete = existing.filter((e) => !keepIds.has(e.id)).map((e) => e.id);
   if (toDelete.length) {
     await tx.clearancePlan.deleteMany({ where: { id: { in: toDelete } } });
   }
 
-  for (const c of rows) {
-    if (c.id) {
+  for (const { c, targetId } of resolved) {
+    if (targetId) {
       await tx.clearancePlan.update({
-        where: { id: c.id },
+        where: { id: targetId },
         data: toData(c),
       });
     } else {

@@ -62,10 +62,14 @@ export class CreateExpenseDto {
   @IsString()
   description!: string;
 
-  @ApiProperty({ description: 'ExpenseType.code', example: 'OFFICE_SUPPLIES' })
+  @ApiPropertyOptional({
+    description: 'ExpenseType.code — defaults to OTHER when omitted',
+    default: 'OTHER',
+  })
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  expenseType!: string;
+  expenseType: string = 'OTHER';
 
   @ApiPropertyOptional()
   @IsOptional()

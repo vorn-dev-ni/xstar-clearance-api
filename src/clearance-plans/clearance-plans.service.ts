@@ -114,7 +114,10 @@ export class ClearancePlansService {
     await this.prisma.$transaction((tx) =>
       syncJobContainers(tx, clearanceJobId, containers, userId),
     );
-    return this.findAll({ clearanceJobId } as ListClearancePlansDto);
+    // Return every row for the job. Pass explicit pagination — a bare object cast
+    // to the DTO skips class-transformer's `page`/`limit` defaults, which would
+    // make `toSkipTake` compute `skip: NaN` and 500 on the Prisma query.
+    return this.findAll({ clearanceJobId, page: 1, limit: 500 });
   }
 
   async findAll(query: ListClearancePlansDto) {

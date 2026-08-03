@@ -197,6 +197,7 @@ export class ExpenseService {
         where,
         include: {
           supplier: { select: { id: true, nameEn: true } },
+          clearanceJob: { select: { id: true, jobNumber: true } },
           vendorPayments: { select: { amount: true } },
         },
         orderBy: [{ createdAt: 'desc' }, { recordDate: 'desc' }],

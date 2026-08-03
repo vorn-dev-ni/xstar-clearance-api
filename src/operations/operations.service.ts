@@ -110,6 +110,13 @@ export class OperationsService {
       status: query.status,
       clearanceType: query.clearanceType,
       shipmentStatus: query.shipmentStatus,
+      // Filter by clearance-plan presence (e.g. the "New clearance plan" picker
+      // asks for shipments that don't have one yet).
+      ...(query.hasClearancePlan === undefined
+        ? {}
+        : {
+            clearancePlans: query.hasClearancePlan ? { some: {} } : { none: {} },
+          }),
       ...(query.search
         ? {
             OR: [

@@ -190,6 +190,9 @@ model ClearancePlan {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // One plan row per container within a shipment — backstops the app-level
+  // dedupe in syncJobContainers so duplicate container plans can't be created.
+  @@unique([clearanceJobId, container])
   @@index([clearanceJobId])
   @@index([clearanceDate])
   @@index([status])
