@@ -95,7 +95,9 @@ model ExpenseItem {
   itemDate      DateTime? // Line date; defaults to the record date on the voucher
   invoiceNumber String?
   description   String
-  amount        Decimal @db.Decimal(15, 2)
+  amount        Decimal  @db.Decimal(15, 2)
+  tax           Decimal? @db.Decimal(15, 2) // per-line tax (mirrors a BL cost line)
+  deposit       Decimal? @db.Decimal(15, 2) // per-line container deposit
 
   createdAt DateTime @default(now())
 

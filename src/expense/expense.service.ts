@@ -47,19 +47,24 @@ export class ExpenseService {
     // A voucher's total is the sum of its line items; fall back to a flat
     // amount for legacy/single-line callers (B/L costing, clearance bills).
     const amount = resolveAmount(dto);
-    // Prefer an explicit tax amount (B/L costing enters tax as money), else
-    // derive it from the tax rate.
-    const taxAmount =
-      dto.taxAmount != null
+    const hasItems = !!dto.items?.length;
+    // With line items, record-level tax/deposit are the sum of the item lines
+    // (each item mirrors a B/L cost line). Flat callers (B/L costing "Add cost")
+    // keep entering tax/deposit at the record level.
+    const taxAmount = hasItems
+      ? sumItems(dto.items, 'tax')
+      : dto.taxAmount != null
         ? round2(dto.taxAmount)
         : dto.taxRate != null
           ? round2((amount * dto.taxRate) / 100)
           : 0;
-    const hasTax = dto.taxAmount != null || dto.taxRate != null;
+    const hasTax = hasItems || dto.taxAmount != null || dto.taxRate != null;
+    const deposit = hasItems
+      ? sumItems(dto.items, 'deposit')
+      : (dto.deposit ?? 0);
     // Actual cost mirrors the client's B/L costing formula:
     // Amount + Tax − Deposit (explicit override still honored).
-    const actualCost =
-      dto.actualCost ?? round2(amount + taxAmount - (dto.deposit ?? 0));
+    const actualCost = dto.actualCost ?? round2(amount + taxAmount - deposit);
     const record = await this.prisma.$transaction(async (tx) => {
       const recordNumber = await nextNumber(
         tx,
@@ -80,7 +85,7 @@ export class ExpenseService {
           accountId: dto.accountId,
           taxRate: dto.taxRate,
           taxAmount: hasTax ? taxAmount : undefined,
-          deposit: dto.deposit,
+          deposit: hasItems ? deposit : dto.deposit,
           actualCost,
           invoiceNumber: dto.invoiceNumber,
           poNumber: dto.poNumber,
@@ -112,7 +117,7 @@ export class ExpenseService {
     // Keep the shipment's container-deposit tracker in step with this expense.
     await this.reconcileJobDeposit(
       record,
-      dto.deposit ?? 0,
+      deposit,
       dto.shippingLine,
       dto.volume,
       userId,
@@ -287,24 +292,30 @@ export class ExpenseService {
     const { items, recordDate, shippingLine, volume, ...rest } = dto;
     // Recompute tax + actual cost from the merged (existing + patch) values so
     // the B/L costing total stays consistent: actualCost = amount + tax − deposit.
-    const amount = items?.length
-      ? round2(items.reduce((s, i) => s + i.amount, 0))
+    const hasItems = !!items?.length;
+    const amount = hasItems
+      ? round2((items ?? []).reduce((s, i) => s + i.amount, 0))
       : (dto.amount ?? Number(existing.amount));
     const taxRate =
       dto.taxRate ??
       (existing.taxRate != null ? Number(existing.taxRate) : null);
-    const deposit =
-      dto.deposit ?? (existing.deposit != null ? Number(existing.deposit) : 0);
-    const taxAmount =
-      dto.taxAmount != null
+    // With items, record-level tax/deposit are the item sums; otherwise fall back
+    // to the patch value or the existing record (flat B/L costing lines).
+    const existingDeposit =
+      existing.deposit != null ? Number(existing.deposit) : 0;
+    const deposit = hasItems
+      ? sumItems(items, 'deposit')
+      : (dto.deposit ?? existingDeposit);
+    const taxAmount = hasItems
+      ? sumItems(items, 'tax')
+      : dto.taxAmount != null
         ? round2(dto.taxAmount)
         : taxRate != null
           ? round2((amount * taxRate) / 100)
           : existing.taxAmount != null
             ? Number(existing.taxAmount)
             : 0;
-    const actualCost =
-      dto.actualCost ?? round2(amount + taxAmount - (deposit ?? 0));
+    const actualCost = dto.actualCost ?? round2(amount + taxAmount - deposit);
     const updated = await this.prisma.expenseRecord.update({
       where: { id },
       data: {
@@ -312,6 +323,7 @@ export class ExpenseService {
         recordDate: recordDate ? new Date(recordDate) : undefined,
         amount,
         taxAmount,
+        deposit,
         actualCost,
         // Editing an expense sends it back for approval.
         approvalStatus: ApprovalStatus.PENDING,
@@ -675,6 +687,14 @@ function resolveAmount(dto: CreateExpenseDto): number {
   return dto.amount;
 }
 
+/** Sum a numeric field across items (tax/deposit are per-line; default 0). */
+function sumItems(
+  items: { tax?: number; deposit?: number }[] | undefined,
+  key: 'tax' | 'deposit',
+): number {
+  return round2((items ?? []).reduce((s, i) => s + (i[key] ?? 0), 0));
+}
+
 /** Map an item DTO to a Prisma nested-create row. */
 function toItemCreate(i: {
   itemNumber: number;
@@ -684,6 +704,8 @@ function toItemCreate(i: {
   invoiceNumber?: string;
   description: string;
   amount: number;
+  tax?: number;
+  deposit?: number;
 }): Prisma.ExpenseItemCreateWithoutExpenseRecordInput {
   return {
     itemNumber: i.itemNumber,
@@ -693,6 +715,8 @@ function toItemCreate(i: {
     invoiceNumber: i.invoiceNumber,
     description: i.description,
     amount: i.amount,
+    tax: i.tax ?? null,
+    deposit: i.deposit ?? null,
   };
 }
 

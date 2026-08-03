@@ -51,6 +51,19 @@ export class ExpenseItemDto {
   @ApiProperty({ example: 132 })
   @IsNumber({ maxDecimalPlaces: 2 })
   amount!: number;
+
+  @ApiPropertyOptional({ description: 'Per-line tax', example: 5 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  tax?: number;
+
+  @ApiPropertyOptional({
+    description: 'Per-line container deposit',
+    example: 100,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  deposit?: number;
 }
 
 export class CreateExpenseDto {
