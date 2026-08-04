@@ -91,7 +91,11 @@ function decoratorBlock(lines: string[], idx: number): string[] {
   for (let i = idx; i >= 0 && lines[i].trim().startsWith('@'); i--) {
     block.unshift(lines[i]);
   }
-  for (let i = idx + 1; i < lines.length && lines[i].trim().startsWith('@'); i++) {
+  for (
+    let i = idx + 1;
+    i < lines.length && lines[i].trim().startsWith('@');
+    i++
+  ) {
     block.push(lines[i]);
   }
   return block;
@@ -134,15 +138,14 @@ describe('OWNER read-access invariant', () => {
       for (const { line, permission } of gets) {
         // `undefined` = open to any authenticated user (OWNER included).
         // Otherwise OWNER must hold the gating permission.
-        const readable = permission === undefined || OWNER_PERMISSIONS.has(permission);
+        const readable =
+          permission === undefined || OWNER_PERMISSIONS.has(permission);
         expect({
           controller: controller.path,
           line,
           gatingPermission: permission ?? '(open)',
           readable,
-        }).toEqual(
-          expect.objectContaining({ readable: true }),
-        );
+        }).toEqual(expect.objectContaining({ readable: true }));
       }
     },
   );

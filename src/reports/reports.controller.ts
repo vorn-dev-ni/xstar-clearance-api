@@ -15,6 +15,7 @@ import {
   PeriodQueryDto,
   TrendQueryDto,
 } from './dto/report-query.dto';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 import { ReportExportService } from './report-export.service';
 import { ReportsService } from './reports.service';
 
@@ -29,6 +30,7 @@ const REPORT_TITLES: Record<string, string> = {
 
 @ApiTags('reports')
 @ApiBearerAuth()
+@RequirePermission('reports.view')
 @Controller('reports')
 export class ReportsController {
   constructor(

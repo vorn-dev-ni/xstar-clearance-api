@@ -32,7 +32,8 @@ export const MODULES: ModuleDef[] = [
     capabilities: ['view', 'edit', 'action'],
   },
   { key: 'reports', label: 'Reports', capabilities: ['view'] },
-  { key: 'settings', label: 'Settings', capabilities: ['view', 'edit'] },
+  // Settings pages are edit-gated; there is no read-only settings view.
+  { key: 'settings', label: 'Settings', capabilities: ['edit'] },
   { key: 'users', label: 'Users', capabilities: ['view', 'edit'] },
   { key: 'audit', label: 'Audit', capabilities: ['view'] },
 ];
