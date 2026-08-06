@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { ACCOUNT_CODES } from '../common/accounting.constants';
+import { IncomeService } from '../income/income.service';
 import { paginationMeta, toSkipTake } from '../common/pagination';
 import { JournalService } from '../journal/journal.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,10 +29,14 @@ export class InvoicesService {
     private readonly prisma: PrismaService,
     private readonly journal: JournalService,
     private readonly audit: AuditService,
+    private readonly income: IncomeService,
   ) {}
 
-  async create(dto: CreateInvoiceDto, userId: string) {
-    // A debit note is "not under company title" and carries no VAT.
+  /**
+   * Derive line amounts and invoice totals from the input. A debit note is "not
+   * under company title" and carries no VAT. Shared by create and update.
+   */
+  private computeTotals(dto: CreateInvoiceDto) {
     const invoiceType = dto.invoiceType ?? InvoiceType.TAX_INVOICE;
     const isDebitNote = invoiceType === InvoiceType.DEBIT_NOTE;
     const taxRate = isDebitNote ? 0 : (dto.taxRate ?? 10);
@@ -46,6 +51,80 @@ export class InvoicesService {
     );
     const taxAmount = isDebitNote ? 0 : round2((taxableBase * taxRate) / 100);
     const totalAmount = round2(subtotal + taxAmount);
+    return {
+      invoiceType,
+      isDebitNote,
+      taxRate,
+      lines,
+      subtotal,
+      taxAmount,
+      totalAmount,
+    };
+  }
+
+  /** Post an issued invoice to the ledger: DR A/R, CR revenue, CR VAT payable. */
+  private async postInvoiceJournal(
+    tx: Prisma.TransactionClient,
+    invoice: {
+      id: string;
+      invoiceNumber: string;
+      subtotal: Prisma.Decimal;
+      taxAmount: Prisma.Decimal;
+      totalAmount: Prisma.Decimal;
+    },
+    userId: string,
+  ) {
+    const arId = await this.journal.accountIdByCode(
+      tx,
+      ACCOUNT_CODES.ACCOUNTS_RECEIVABLE,
+    );
+    const revenueId = await this.journal.accountIdByCode(
+      tx,
+      ACCOUNT_CODES.OPERATION_REVENUE,
+    );
+    const vatId = await this.journal.accountIdByCode(
+      tx,
+      ACCOUNT_CODES.VAT_PAYABLE,
+    );
+    const subtotal = Number(invoice.subtotal);
+    const taxAmount = Number(invoice.taxAmount);
+    const total = Number(invoice.totalAmount);
+    const lines = [
+      { accountId: arId, entryType: EntryLineType.DEBIT, amount: total },
+      {
+        accountId: revenueId,
+        entryType: EntryLineType.CREDIT,
+        amount: subtotal,
+      },
+    ];
+    if (taxAmount > 0) {
+      lines.push({
+        accountId: vatId,
+        entryType: EntryLineType.CREDIT,
+        amount: taxAmount,
+      });
+    }
+    return this.journal.postJournal(tx, {
+      entryDate: new Date(),
+      description: `Invoice ${invoice.invoiceNumber}`,
+      referenceType: ReferenceType.INVOICE,
+      referenceId: invoice.id,
+      invoiceId: invoice.id,
+      createdBy: userId,
+      lines,
+    });
+  }
+
+  async create(dto: CreateInvoiceDto, userId: string) {
+    const {
+      invoiceType,
+      isDebitNote,
+      taxRate,
+      lines,
+      subtotal,
+      taxAmount,
+      totalAmount,
+    } = this.computeTotals(dto);
 
     const invoice = await this.prisma.$transaction(async (tx) => {
       const invoiceNumber = await nextInvoiceNumber(
@@ -183,7 +262,12 @@ export class InvoicesService {
   async findOne(id: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
-      include: { lineItems: true, payments: true, customer: true },
+      include: {
+        lineItems: true,
+        payments: true,
+        customer: true,
+        incomeRecord: { select: { id: true, recordNumber: true } },
+      },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     return invoice;
@@ -200,47 +284,7 @@ export class InvoicesService {
         );
       }
 
-      const arId = await this.journal.accountIdByCode(
-        tx,
-        ACCOUNT_CODES.ACCOUNTS_RECEIVABLE,
-      );
-      const revenueId = await this.journal.accountIdByCode(
-        tx,
-        ACCOUNT_CODES.OPERATION_REVENUE,
-      );
-      const vatId = await this.journal.accountIdByCode(
-        tx,
-        ACCOUNT_CODES.VAT_PAYABLE,
-      );
-
-      const subtotal = Number(invoice.subtotal);
-      const taxAmount = Number(invoice.taxAmount);
-      const total = Number(invoice.totalAmount);
-      const lines = [
-        { accountId: arId, entryType: EntryLineType.DEBIT, amount: total },
-        {
-          accountId: revenueId,
-          entryType: EntryLineType.CREDIT,
-          amount: subtotal,
-        },
-      ];
-      if (taxAmount > 0) {
-        lines.push({
-          accountId: vatId,
-          entryType: EntryLineType.CREDIT,
-          amount: taxAmount,
-        });
-      }
-
-      const entry = await this.journal.postJournal(tx, {
-        entryDate: new Date(),
-        description: `Invoice ${invoice.invoiceNumber}`,
-        referenceType: ReferenceType.INVOICE,
-        referenceId: invoice.id,
-        invoiceId: invoice.id,
-        createdBy: userId,
-        lines,
-      });
+      const entry = await this.postInvoiceJournal(tx, invoice, userId);
 
       const updated = await tx.invoice.update({
         where: { id },
@@ -263,6 +307,99 @@ export class InvoicesService {
       status: result.updated.status,
       journalEntryId: result.entry.id,
       issuedAt: result.updated.updatedAt,
+    };
+  }
+
+  /**
+   * Edit an invoice — allowed for DRAFT, ISSUED and SENT (paid/partially-paid etc.
+   * are out of scope). DRAFT is a plain update. ISSUED/SENT have a posted
+   * A/R+revenue+VAT entry and no payments, so it's reversed and re-posted with the
+   * new amounts; balanceDue tracks the new total.
+   */
+  async update(id: string, dto: CreateInvoiceDto, userId: string) {
+    const existing = await this.findOne(id);
+    const editableStatuses: InvoiceStatus[] = [
+      InvoiceStatus.DRAFT,
+      InvoiceStatus.ISSUED,
+      InvoiceStatus.SENT,
+    ];
+    if (!editableStatuses.includes(existing.status)) {
+      throw new UnprocessableEntityException(
+        `Only draft, issued or sent invoices can be edited (current: ${existing.status})`,
+      );
+    }
+    // Anything past DRAFT already posted to the ledger and must be re-posted.
+    const wasPosted = existing.status !== InvoiceStatus.DRAFT;
+    const {
+      invoiceType,
+      isDebitNote,
+      taxRate,
+      lines,
+      subtotal,
+      taxAmount,
+      totalAmount,
+    } = this.computeTotals(dto);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (wasPosted) {
+        await this.journal.reverseEntriesByReference(
+          tx,
+          ReferenceType.INVOICE,
+          id,
+        );
+      }
+      const invoice = await tx.invoice.update({
+        where: { id },
+        data: {
+          invoiceDate: new Date(dto.invoiceDate),
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+          customerId: dto.customerId,
+          clearanceJobId: dto.clearanceJobId ?? null,
+          invoiceType,
+          underCompanyTitle: !isDebitNote,
+          subtotal,
+          taxRate,
+          taxAmount,
+          totalAmount,
+          balanceDue: totalAmount,
+          deposit: dto.deposit ?? existing.deposit,
+          currency: dto.currency,
+          description: dto.description,
+          notes: dto.notes,
+          lineItems: {
+            deleteMany: {},
+            create: lines.map((l) => ({
+              itemNumber: l.itemNumber,
+              description: l.description,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              amount: l.amount,
+              taxable: l.taxable,
+              notes: l.notes,
+            })),
+          },
+        },
+      });
+      if (wasPosted) {
+        await this.postInvoiceJournal(tx, invoice, userId);
+      }
+      return invoice;
+    });
+
+    await this.audit.log({
+      userId,
+      entityType: 'Invoice',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      before: { totalAmount: Number(existing.totalAmount) },
+      after: { totalAmount: Number(updated.totalAmount) },
+    });
+
+    return {
+      id: updated.id,
+      invoiceNumber: updated.invoiceNumber,
+      status: updated.status,
+      totalAmount: Number(updated.totalAmount),
     };
   }
 
@@ -317,6 +454,17 @@ export class InvoicesService {
         where: { id },
         data: { paidAmount: newPaid, balanceDue: newBalance, status },
       });
+
+      // Once fully paid, surface this invoice in the income/revenue register via a
+      // reporting-only income row (no extra journal post — see IncomeService). Idempotent.
+      if (status === InvoiceStatus.PAID) {
+        await this.income.createFromInvoiceTx(
+          tx,
+          invoice,
+          new Date(dto.paymentDate),
+          userId,
+        );
+      }
 
       const bankId =
         dto.bankAccountId ??

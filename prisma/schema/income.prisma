@@ -22,6 +22,16 @@ model IncomeRecord {
   billNumber      String? // BL Number, etc.
   referenceNumber String? // For tracking
 
+  // Where this revenue came from. MANUAL rows are keyed in by staff and post to the
+  // ledger; INVOICE rows are auto-created when an invoice is fully paid — they exist for
+  // the revenue register/reports only and are NOT posted to the journal (the invoice's own
+  // A/R + revenue postings are the ledger source of truth, so posting again would double
+  // count revenue). See [[invoice-income-link]].
+  source    IncomeSource @default(MANUAL)
+  // One reporting-only income row per fully-paid invoice (unique = idempotent trigger).
+  invoiceId String?      @unique
+  invoice   Invoice?     @relation("InvoiceIncome", fields: [invoiceId], references: [id])
+
   // Company income statement fields
   receivedFrom     String? // userId of the staff who received it
   receivedFromUser User?    @relation("IncomeReceivedBy", fields: [receivedFrom], references: [id])
@@ -67,6 +77,12 @@ model IncomeRecord {
   @@index([serviceType])
   @@index([status])
   @@index([approvalStatus])
+  @@index([invoiceId])
+}
+
+enum IncomeSource {
+  MANUAL
+  INVOICE
 }
 
 /// Accounting-managed income service types (CRUD). `code` is stored on

@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Query,
   Res,
@@ -18,6 +19,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { ExportInvoicesDto } from './dto/export-invoices.dto';
 import { ListInvoicesDto } from './dto/list-invoices.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
+import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoiceExportService } from './invoice-export.service';
 import { InvoicesService } from './invoices.service';
 
@@ -35,6 +37,16 @@ export class InvoicesController {
   @RequirePermission('accounting.edit')
   create(@Body() dto: CreateInvoiceDto, @CurrentUser() user: AuthUser) {
     return this.invoices.create(dto, user.userId);
+  }
+
+  @Patch(':id')
+  @RequirePermission('accounting.edit')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateInvoiceDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.invoices.update(id, dto, user.userId);
   }
 
   @Get()

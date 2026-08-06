@@ -7,6 +7,7 @@ import {
   ApprovalStatus,
   AuditAction,
   EntryLineType,
+  IncomeSource,
   Prisma,
   ReferenceType,
   TransactionStatus,
@@ -135,6 +136,65 @@ export class IncomeService {
     };
   }
 
+  /**
+   * Auto-record revenue for a fully-paid invoice, inside the caller's payment transaction.
+   * This row is REPORTING-ONLY: it surfaces the invoice in the income register and revenue
+   * reports (which read IncomeRecord directly), but is NOT posted to the journal — the
+   * invoice already booked A/R + revenue at finalize, so a journal post here would double
+   * count revenue. Idempotent via the unique `invoiceId` (no-op if already linked).
+   */
+  async createFromInvoiceTx(
+    tx: Prisma.TransactionClient,
+    invoice: {
+      id: string;
+      invoiceNumber: string;
+      customerId: string;
+      totalAmount: Prisma.Decimal;
+      currency: string;
+      clearanceJobId: string | null;
+    },
+    paymentDate: Date,
+    userId: string,
+  ) {
+    const existing = await tx.incomeRecord.findUnique({
+      where: { invoiceId: invoice.id },
+      select: { id: true },
+    });
+    if (existing) return existing;
+
+    const customer = await tx.customer.findUnique({
+      where: { id: invoice.customerId },
+      select: { nameEn: true },
+    });
+    const accountId = await this.journal.accountIdByCode(
+      tx,
+      ACCOUNT_CODES.OPERATION_REVENUE,
+    );
+    const recordNumber = await nextNumber(tx, 'INC', paymentDate);
+    // `amount` mirrors the full received amount (incl. VAT), matching how manual income
+    // records book gross cash. Switch to invoice.subtotal if VAT should be excluded.
+    return tx.incomeRecord.create({
+      data: {
+        recordNumber,
+        recordDate: paymentDate,
+        recordedDate: new Date(),
+        description: `Invoice ${invoice.invoiceNumber}`,
+        serviceType: 'OTHER',
+        source: IncomeSource.INVOICE,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        customerId: invoice.customerId,
+        clearanceJobId: invoice.clearanceJobId ?? undefined,
+        amount: invoice.totalAmount,
+        currency: invoice.currency,
+        accountId,
+        receivedFromName: customer?.nameEn,
+        status: TransactionStatus.POSTED,
+        createdBy: userId,
+      },
+    });
+  }
+
   private buildWhere(query: ListIncomeDto): Prisma.IncomeRecordWhereInput {
     const recordDate =
       query.dateFrom || query.dateTo
@@ -214,6 +274,11 @@ export class IncomeService {
    */
   async update(id: string, dto: UpdateIncomeDto, userId: string) {
     const existing = await this.findOne(id);
+    if (existing.source === IncomeSource.INVOICE) {
+      throw new BadRequestException(
+        'Invoice-linked income is managed from the invoice and cannot be edited here',
+      );
+    }
     if (dto.serviceType) await this.assertServiceType(dto.serviceType);
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.journal.reverseEntriesByReference(

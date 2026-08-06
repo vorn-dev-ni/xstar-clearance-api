@@ -50,6 +50,8 @@ model Invoice {
   lineItems    InvoiceLineItem[]
   payments     Payment[]
   journalEntry JournalEntry[]
+  // Reporting-only income row auto-created when this invoice is fully paid.
+  incomeRecord IncomeRecord? @relation("InvoiceIncome")
 
   @@index([invoiceNumber])
   @@index([customerId])

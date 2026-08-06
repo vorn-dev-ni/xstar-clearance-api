@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import type { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { IncomeService } from '../income/income.service';
 import { JournalService } from '../journal/journal.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoicesService } from './invoices.service';
@@ -46,6 +47,7 @@ describe('InvoicesService.findAll', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: JournalService, useValue: {} },
         { provide: AuditService, useValue: {} },
+        { provide: IncomeService, useValue: {} },
       ],
     }).compile();
     return {
@@ -140,6 +142,7 @@ describe('InvoicesService.create — invoice types', () => {
       prisma as unknown as PrismaService,
       {} as JournalService,
       audit as unknown as AuditService,
+      {} as IncomeService,
     );
     return { service, created };
   }
@@ -183,5 +186,86 @@ describe('InvoicesService.create — invoice types', () => {
     expect(data.taxAmount).toBe(10);
     expect(data.underCompanyTitle).toBe(true);
     expect(data.totalAmount).toBe(110);
+  });
+});
+
+describe('InvoicesService.recordPayment — income link', () => {
+  function build(overrides: Record<string, unknown> = {}) {
+    const invoice = {
+      id: 'inv_1',
+      invoiceNumber: 'ST26-000001',
+      status: 'ISSUED',
+      customerId: 'cust_1',
+      currency: 'USD',
+      clearanceJobId: null,
+      totalAmount: 110,
+      paidAmount: 0,
+      balanceDue: 110,
+      ...overrides,
+    };
+    const tx = {
+      invoice: {
+        findUnique: jest.fn().mockResolvedValue(invoice),
+        update: jest.fn().mockResolvedValue({ ...invoice }),
+      },
+      payment: {
+        count: jest.fn().mockResolvedValue(0),
+        create: jest.fn().mockResolvedValue({
+          id: 'pmt_1',
+          paymentNumber: 'PMT-2026-0001',
+          amount: 0,
+          status: 'COMPLETED',
+          createdAt: new Date(),
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (t: typeof tx) => unknown) => cb(tx)),
+    };
+    const journal = {
+      accountIdByCode: jest.fn().mockResolvedValue('acc_x'),
+      postJournal: jest.fn().mockResolvedValue({ id: 'je_1' }),
+    };
+    const income = {
+      createFromInvoiceTx: jest.fn().mockResolvedValue({ id: 'inc_1' }),
+    };
+    const service = new InvoicesService(
+      prisma as unknown as PrismaService,
+      journal as unknown as JournalService,
+      { log: jest.fn() } as unknown as AuditService,
+      income as unknown as IncomeService,
+    );
+    return { service, income, tx };
+  }
+
+  const paymentDto = {
+    paymentDate: '2026-06-01',
+    amount: 110,
+    method: 'BANK_TRANSFER' as const,
+  };
+
+  it('auto-creates a linked income record when the payment fully pays the invoice', async () => {
+    const { service, income } = build();
+
+    await service.recordPayment('inv_1', paymentDto, 'user_1');
+
+    expect(income.createFromInvoiceTx).toHaveBeenCalledTimes(1);
+    const [, invoiceArg, dateArg, userArg] = income.createFromInvoiceTx.mock
+      .calls[0] as [unknown, { id: string; totalAmount: number }, Date, string];
+    expect(invoiceArg).toMatchObject({ id: 'inv_1', totalAmount: 110 });
+    expect(dateArg).toEqual(new Date('2026-06-01'));
+    expect(userArg).toBe('user_1');
+  });
+
+  it('does NOT create an income record on a partial payment', async () => {
+    const { service, income } = build();
+
+    await service.recordPayment(
+      'inv_1',
+      { ...paymentDto, amount: 50 },
+      'user_1',
+    );
+
+    expect(income.createFromInvoiceTx).not.toHaveBeenCalled();
   });
 });
