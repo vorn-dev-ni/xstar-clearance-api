@@ -102,3 +102,101 @@ describe('ReportsService.monthlyTrend', () => {
     expect(result.months[11].revenue).toBe(0);
   });
 });
+
+function plLine(
+  accountId: string,
+  code: string,
+  type: 'REVENUE' | 'EXPENSE',
+  entryType: 'DEBIT' | 'CREDIT',
+  amount: number,
+) {
+  return {
+    amount,
+    entryType,
+    account: {
+      id: accountId,
+      code,
+      nameEn: `Acct ${code}`,
+      type,
+      category: 'X',
+    },
+  };
+}
+
+describe('ReportsService.profitLoss — per-account lines', () => {
+  it('returns per-account rows that sum to the section totals and net profit', async () => {
+    const prisma = {
+      journalEntryLine: {
+        findMany: jest.fn().mockResolvedValue([
+          plLine('rev1', '4001', 'REVENUE', 'CREDIT', 100),
+          plLine('rev1', '4001', 'REVENUE', 'CREDIT', 50), // same account accumulates
+          plLine('rev2', '4002', 'REVENUE', 'CREDIT', 30),
+          plLine('exp1', '5001', 'EXPENSE', 'DEBIT', 40),
+        ]),
+      },
+    } as unknown as PrismaService;
+    const service = new ReportsService(prisma);
+
+    const res = await service.profitLoss(6, 2026);
+
+    expect(res.revenue.accounts).toHaveLength(2);
+    expect(
+      res.revenue.accounts.find((a) => a.accountId === 'rev1')?.amount,
+    ).toBe(150);
+    expect(res.revenue.totalRevenue).toBe(180);
+    expect(res.expenses.accounts).toHaveLength(1);
+    expect(res.expenses.totalExpenses).toBe(40);
+    expect(res.netProfit).toBe(140);
+    const revSum = res.revenue.accounts.reduce((s, a) => s + a.amount, 0);
+    expect(revSum).toBe(res.revenue.totalRevenue);
+  });
+});
+
+describe('ReportsService.balanceSheet — per-account lines', () => {
+  it('lists each account with an accountId and keeps the sheet balanced', async () => {
+    const prisma = {
+      account: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'a1',
+            code: '1100',
+            nameEn: 'Bank',
+            category: 'BANK_ACCOUNT',
+            type: 'BANK',
+            balance: 1000,
+          },
+          {
+            id: 'l1',
+            code: '2100',
+            nameEn: 'A/P',
+            category: 'PAYABLES',
+            type: 'LIABILITY',
+            balance: 400,
+          },
+          {
+            id: 'e1',
+            code: '3001',
+            nameEn: 'Capital',
+            category: 'EQUITY',
+            type: 'EQUITY',
+            balance: 200,
+          },
+        ]),
+      },
+    } as unknown as PrismaService;
+    const service = new ReportsService(prisma);
+
+    const res = await service.balanceSheet();
+
+    expect(res.assets.accounts[0]).toMatchObject({
+      accountId: 'a1',
+      code: '1100',
+    });
+    expect(res.assets.totalAssets).toBe(1000);
+    expect(res.liabilities.accounts[0].accountId).toBe('l1');
+    // retained earnings = assets - liabilities - equity = 1000 - 400 - 200 = 400
+    expect(res.equity.retainedEarnings).toBe(400);
+    // Assets = Liabilities + Equity
+    expect(res.assets.totalAssets).toBe(res.totalLiabilitiesAndEquity);
+  });
+});

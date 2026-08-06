@@ -8,22 +8,30 @@ import {
 /** Company name and currency are filled in by the export service. */
 export type ReportBody = Omit<ReportDocument, 'companyName' | 'currency'>;
 
+interface ReportAccountLine {
+  accountId: string;
+  code: string;
+  nameEn: string;
+  category: string;
+  amount: number;
+}
+
 interface ProfitLossData {
   reportPeriod: string;
-  revenue: { byCategory: Record<string, number>; totalRevenue: number };
-  expenses: { byCategory: Record<string, number>; totalExpenses: number };
+  revenue: { accounts: ReportAccountLine[]; totalRevenue: number };
+  expenses: { accounts: ReportAccountLine[]; totalExpenses: number };
   netProfit: number;
 }
 
 interface BalanceSheetData {
   reportDate: string;
-  assets: { totalAssets: number; byAccount?: Record<string, number> };
-  liabilities: { totalLiabilities: number; byAccount?: Record<string, number> };
+  assets: { totalAssets: number; accounts?: ReportAccountLine[] };
+  liabilities: { totalLiabilities: number; accounts?: ReportAccountLine[] };
   equity: {
     contributedEquity: number;
     retainedEarnings: number;
     totalEquity: number;
-    byAccount?: Record<string, number>;
+    accounts?: ReportAccountLine[];
   };
   totalLiabilitiesAndEquity: number;
 }
@@ -79,14 +87,13 @@ interface AgingData {
   }[];
 }
 
-function categoryRows(byCategory: Record<string, number>): ReportRowSpec[] {
-  return Object.entries(byCategory)
-    .sort(([, a], [, b]) => b - a)
-    .map(([cat, amount]) => ({
-      label: humanizeEnum(cat),
-      value: amount,
-      indent: 1,
-    }));
+function accountLineRows(accounts?: ReportAccountLine[]): ReportRowSpec[] {
+  if (!accounts) return [];
+  return accounts.map((a) => ({
+    label: `${a.code} · ${a.nameEn}`,
+    value: a.amount,
+    indent: 1,
+  }));
 }
 
 function buildProfitLoss(data: ProfitLossData): ReportBody {
@@ -98,7 +105,7 @@ function buildProfitLoss(data: ProfitLossData): ReportBody {
         kind: 'rows',
         heading: 'Revenue',
         rows: [
-          ...categoryRows(data.revenue.byCategory),
+          ...accountLineRows(data.revenue.accounts),
           {
             label: 'Total Revenue',
             value: data.revenue.totalRevenue,
@@ -110,7 +117,7 @@ function buildProfitLoss(data: ProfitLossData): ReportBody {
         kind: 'rows',
         heading: 'Expenses',
         rows: [
-          ...categoryRows(data.expenses.byCategory),
+          ...accountLineRows(data.expenses.accounts),
           {
             label: 'Total Expenses',
             value: data.expenses.totalExpenses,
@@ -126,14 +133,7 @@ function buildProfitLoss(data: ProfitLossData): ReportBody {
   };
 }
 
-function accountRows(map?: Record<string, number>): ReportRowSpec[] {
-  if (!map) return [];
-  return Object.entries(map).map(([label, value]) => ({
-    label,
-    value,
-    indent: 1,
-  }));
-}
+const accountRows = accountLineRows;
 
 function buildBalanceSheet(data: BalanceSheetData): ReportBody {
   return {
@@ -144,7 +144,7 @@ function buildBalanceSheet(data: BalanceSheetData): ReportBody {
         kind: 'rows',
         heading: 'Assets',
         rows: [
-          ...accountRows(data.assets.byAccount),
+          ...accountRows(data.assets.accounts),
           { label: 'Total Assets', value: data.assets.totalAssets, bold: true },
         ],
       },
@@ -152,7 +152,7 @@ function buildBalanceSheet(data: BalanceSheetData): ReportBody {
         kind: 'rows',
         heading: 'Liabilities',
         rows: [
-          ...accountRows(data.liabilities.byAccount),
+          ...accountRows(data.liabilities.accounts),
           {
             label: 'Total Liabilities',
             value: data.liabilities.totalLiabilities,
@@ -164,7 +164,7 @@ function buildBalanceSheet(data: BalanceSheetData): ReportBody {
         kind: 'rows',
         heading: 'Equity',
         rows: [
-          ...accountRows(data.equity.byAccount),
+          ...accountRows(data.equity.accounts),
           {
             label: 'Contributed Equity',
             value: data.equity.contributedEquity,

@@ -17,6 +17,18 @@ import {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
+/** A single clickable line in P&L / Balance Sheet — one account's figure for the report. */
+export interface ReportAccountLine {
+  accountId: string;
+  code: string;
+  nameEn: string;
+  category: string;
+  amount: number;
+}
+
+const sortByCode = (arr: ReportAccountLine[]): ReportAccountLine[] =>
+  arr.sort((a, b) => a.code.localeCompare(b.code));
+
 function periodLabel(month?: number, year?: number): string {
   if (month && year) {
     const name = new Date(Date.UTC(year, month - 1, 1)).toLocaleString('en', {
@@ -46,71 +58,127 @@ function filingPeriodFilter(
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** P&L from POSTED journal lines within the period, grouped by account category. */
+  /**
+   * P&L from POSTED journal lines within the period. Returns per-account line items
+   * (so the report can drill into each account's ledger) plus the category rollup and
+   * totals. Revenue account amount = Σ(credit−debit); expense = Σ(debit−credit).
+   */
   async profitLoss(month?: number, year?: number) {
     const range = monthYearRange(month, year);
     const lines = await this.prisma.journalEntryLine.findMany({
       where: { entry: { status: EntryStatus.POSTED, entryDate: range } },
-      include: { account: { select: { type: true, category: true } } },
+      include: {
+        account: {
+          select: {
+            id: true,
+            code: true,
+            nameEn: true,
+            type: true,
+            category: true,
+          },
+        },
+      },
     });
 
     const revenueByCat: Record<string, number> = {};
     const expenseByCat: Record<string, number> = {};
+    const revenueAcc = new Map<string, ReportAccountLine>();
+    const expenseAcc = new Map<string, ReportAccountLine>();
     let totalRevenue = 0;
     let totalExpenses = 0;
 
+    const bump = (
+      map: Map<string, ReportAccountLine>,
+      a: { id: string; code: string; nameEn: string; category: string },
+      net: number,
+    ) => {
+      const cur =
+        map.get(a.id) ??
+        ({
+          accountId: a.id,
+          code: a.code,
+          nameEn: a.nameEn,
+          category: a.category,
+          amount: 0,
+        } satisfies ReportAccountLine);
+      cur.amount = round2(cur.amount + net);
+      map.set(a.id, cur);
+    };
+
     for (const l of lines) {
       const amt = Number(l.amount);
-      const cat = l.account.category;
-      if (l.account.type === AccountType.REVENUE) {
+      const a = l.account;
+      const cat = a.category;
+      if (a.type === AccountType.REVENUE) {
         const net = l.entryType === EntryLineType.CREDIT ? amt : -amt;
         revenueByCat[cat] = round2((revenueByCat[cat] ?? 0) + net);
         totalRevenue = round2(totalRevenue + net);
-      } else if (l.account.type === AccountType.EXPENSE) {
+        bump(revenueAcc, a, net);
+      } else if (a.type === AccountType.EXPENSE) {
         const net = l.entryType === EntryLineType.DEBIT ? amt : -amt;
         expenseByCat[cat] = round2((expenseByCat[cat] ?? 0) + net);
         totalExpenses = round2(totalExpenses + net);
+        bump(expenseAcc, a, net);
       }
     }
 
     return {
       reportType: 'PROFIT_LOSS',
       reportPeriod: periodLabel(month, year),
-      revenue: { byCategory: revenueByCat, totalRevenue },
-      expenses: { byCategory: expenseByCat, totalExpenses },
+      revenue: {
+        accounts: sortByCode([...revenueAcc.values()]),
+        byCategory: revenueByCat,
+        totalRevenue,
+      },
+      expenses: {
+        accounts: sortByCode([...expenseAcc.values()]),
+        byCategory: expenseByCat,
+        totalExpenses,
+      },
       netProfit: round2(totalRevenue - totalExpenses),
     };
   }
 
-  /** Balance sheet from current account balances (snapshot). */
+  /** Balance sheet from current account balances (snapshot), listed per account. */
   async balanceSheet(date?: string) {
     const accounts = await this.prisma.account.findMany({
       where: { isActive: true },
-      select: { code: true, nameEn: true, type: true, balance: true },
+      select: {
+        id: true,
+        code: true,
+        nameEn: true,
+        category: true,
+        type: true,
+        balance: true,
+      },
       orderBy: { code: 'asc' },
     });
 
     let assets = 0;
     let liabilities = 0;
     let equity = 0;
-    const assetsByAccount: Record<string, number> = {};
-    const liabilitiesByAccount: Record<string, number> = {};
-    const equityByAccount: Record<string, number> = {};
+    const assetsAcc: ReportAccountLine[] = [];
+    const liabilitiesAcc: ReportAccountLine[] = [];
+    const equityAcc: ReportAccountLine[] = [];
 
     for (const a of accounts) {
-      const bal = Number(a.balance);
-      const key = `${a.code} - ${a.nameEn}`;
+      const bal = round2(Number(a.balance));
+      const line: ReportAccountLine = {
+        accountId: a.id,
+        code: a.code,
+        nameEn: a.nameEn,
+        category: a.category,
+        amount: bal,
+      };
       if (a.type === AccountType.ASSET || a.type === AccountType.BANK) {
         assets = round2(assets + bal);
-        assetsByAccount[key] = round2((assetsByAccount[key] ?? 0) + bal);
+        assetsAcc.push(line);
       } else if (a.type === AccountType.LIABILITY) {
         liabilities = round2(liabilities + bal);
-        liabilitiesByAccount[key] = round2(
-          (liabilitiesByAccount[key] ?? 0) + bal,
-        );
+        liabilitiesAcc.push(line);
       } else if (a.type === AccountType.EQUITY) {
         equity = round2(equity + bal);
-        equityByAccount[key] = round2((equityByAccount[key] ?? 0) + bal);
+        equityAcc.push(line);
       }
     }
     // Retained earnings balances the sheet (assets = liabilities + equity).
@@ -119,16 +187,16 @@ export class ReportsService {
     return {
       reportType: 'BALANCE_SHEET',
       reportDate: date ?? new Date().toISOString().slice(0, 10),
-      assets: { totalAssets: assets, byAccount: assetsByAccount },
+      assets: { totalAssets: assets, accounts: assetsAcc },
       liabilities: {
         totalLiabilities: liabilities,
-        byAccount: liabilitiesByAccount,
+        accounts: liabilitiesAcc,
       },
       equity: {
         contributedEquity: equity,
         retainedEarnings,
         totalEquity: round2(equity + retainedEarnings),
-        byAccount: equityByAccount,
+        accounts: equityAcc,
       },
       totalLiabilitiesAndEquity: round2(
         liabilities + equity + retainedEarnings,
