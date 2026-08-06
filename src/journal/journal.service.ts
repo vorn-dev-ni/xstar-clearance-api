@@ -101,6 +101,40 @@ export class JournalService {
     return entry;
   }
 
+  /**
+   * Reverse (undo + delete) every POSTED journal entry tied to a source record,
+   * moving each account balance back by the inverse of what `postJournal` applied.
+   * Used when a source document (e.g. an income record) is edited so its ledger
+   * effect can be re-posted cleanly. Lines cascade-delete with the entry.
+   */
+  async reverseEntriesByReference(
+    tx: Prisma.TransactionClient,
+    referenceType: ReferenceType,
+    referenceId: string,
+  ): Promise<void> {
+    const entries = await tx.journalEntry.findMany({
+      where: { referenceType, referenceId, status: EntryStatus.POSTED },
+      include: { lines: true },
+    });
+    for (const entry of entries) {
+      const accounts = await tx.account.findMany({
+        where: { id: { in: entry.lines.map((l) => l.accountId) } },
+        select: { id: true, type: true },
+      });
+      const typeById = new Map(accounts.map((a) => [a.id, a.type]));
+      for (const line of entry.lines) {
+        const type = typeById.get(line.accountId);
+        if (!type) continue;
+        const delta = balanceDelta(type, line.entryType, Number(line.amount));
+        await tx.account.update({
+          where: { id: line.accountId },
+          data: { balance: { increment: -delta } },
+        });
+      }
+      await tx.journalEntry.delete({ where: { id: entry.id } });
+    }
+  }
+
   /** Resolve a well-known account id by its chart code (e.g. bank `1100`). */
   async accountIdByCode(
     tx: Prisma.TransactionClient,

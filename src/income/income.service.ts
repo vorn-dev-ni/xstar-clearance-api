@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  UnprocessableEntityException,
 } from '@nestjs/common';
 import {
   ApprovalStatus,
@@ -38,6 +37,45 @@ export class IncomeService {
     }
   }
 
+  /**
+   * Post an income record's revenue to the ledger: DR bank `1100` / CR the record's
+   * revenue account for its amount. Reused by create and edit (after a reversal).
+   */
+  private async postIncomeJournal(
+    tx: Prisma.TransactionClient,
+    record: {
+      id: string;
+      description: string;
+      amount: Prisma.Decimal;
+      accountId: string;
+      recordDate: Date;
+    },
+    userId: string,
+  ) {
+    const bankId = await this.journal.accountIdByCode(tx, ACCOUNT_CODES.BANK);
+    const amount = Number(record.amount);
+    return this.journal.postJournal(tx, {
+      entryDate: record.recordDate,
+      description: `Income: ${record.description}`,
+      referenceType: ReferenceType.INCOME,
+      referenceId: record.id,
+      incomeRecordId: record.id,
+      createdBy: userId,
+      lines: [
+        { accountId: bankId, entryType: EntryLineType.DEBIT, amount },
+        {
+          accountId: record.accountId,
+          entryType: EntryLineType.CREDIT,
+          amount,
+        },
+      ],
+    });
+  }
+
+  /**
+   * Record revenue that has already been received: create it and immediately post it
+   * to the ledger as POSTED/APPROVED (there is no pending/approval step).
+   */
   async create(dto: CreateIncomeDto, userId: string) {
     await this.assertServiceType(dto.serviceType);
     const record = await this.prisma.$transaction(async (tx) => {
@@ -46,7 +84,7 @@ export class IncomeService {
         'INC',
         new Date(dto.recordDate),
       );
-      return tx.incomeRecord.create({
+      const created = await tx.incomeRecord.create({
         data: {
           recordNumber,
           recordDate: new Date(dto.recordDate),
@@ -69,6 +107,16 @@ export class IncomeService {
           notes: dto.notes,
           attachmentUrl: dto.attachmentUrl,
           createdBy: userId,
+        },
+      });
+      await this.postIncomeJournal(tx, created, userId);
+      // Posted to the ledger immediately, but approval is a separate later sign-off,
+      // so approvalStatus stays PENDING (its default).
+      return tx.incomeRecord.update({
+        where: { id: created.id },
+        data: {
+          status: TransactionStatus.POSTED,
+          recordedDate: new Date(),
         },
       });
     });
@@ -97,6 +145,7 @@ export class IncomeService {
         : monthYearRange(query.month, query.year);
     return {
       status: query.status,
+      approvalStatus: query.approvalStatus,
       serviceType: query.serviceType,
       customerId: query.customerId,
       clearanceJobId: query.clearanceJobId,
@@ -158,23 +207,33 @@ export class IncomeService {
     return record;
   }
 
+  /**
+   * Edit a recorded revenue. Since records are posted on create, the existing ledger
+   * entry is reversed and re-posted with the new amount/account so account balances
+   * stay correct. The record stays POSTED but is sent back for approval (PENDING).
+   */
   async update(id: string, dto: UpdateIncomeDto, userId: string) {
     const existing = await this.findOne(id);
-    if (existing.status === TransactionStatus.POSTED) {
-      throw new UnprocessableEntityException(
-        'Posted income records cannot be edited',
-      );
-    }
     if (dto.serviceType) await this.assertServiceType(dto.serviceType);
-    const updated = await this.prisma.incomeRecord.update({
-      where: { id },
-      data: {
-        ...dto,
-        recordDate: dto.recordDate ? new Date(dto.recordDate) : undefined,
-        // Editing sends the record back for approval.
-        approvalStatus: ApprovalStatus.PENDING,
-        status: TransactionStatus.PENDING,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.journal.reverseEntriesByReference(
+        tx,
+        ReferenceType.INCOME,
+        id,
+      );
+      const record = await tx.incomeRecord.update({
+        where: { id },
+        data: {
+          ...dto,
+          recordDate: dto.recordDate ? new Date(dto.recordDate) : undefined,
+          status: TransactionStatus.POSTED,
+          approvalStatus: ApprovalStatus.PENDING,
+          approvedBy: null,
+          approvalDate: null,
+        },
+      });
+      await this.postIncomeJournal(tx, record, userId);
+      return record;
     });
     await this.audit.log({
       userId,
@@ -187,79 +246,48 @@ export class IncomeService {
     return updated;
   }
 
-  /** Approve: mark POSTED and post DR bank / CR revenue journal. */
+  /**
+   * Approve: a management sign-off only. The record is already posted to the ledger
+   * on create, so this just flips the approval badge — no journal/balance change.
+   */
   async approve(id: string, userId: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      const record = await tx.incomeRecord.findUnique({ where: { id } });
-      if (!record) throw new NotFoundException('Income record not found');
-      if (record.status !== TransactionStatus.PENDING) {
-        throw new UnprocessableEntityException(
-          `Only PENDING income can be approved (current: ${record.status})`,
-        );
-      }
-
-      const bankId = await this.journal.accountIdByCode(tx, ACCOUNT_CODES.BANK);
-      const amount = Number(record.amount);
-      const entry = await this.journal.postJournal(tx, {
-        entryDate: new Date(),
-        description: `Income: ${record.description}`,
-        referenceType: ReferenceType.INCOME,
-        referenceId: record.id,
-        incomeRecordId: record.id,
-        createdBy: userId,
-        lines: [
-          { accountId: bankId, entryType: EntryLineType.DEBIT, amount },
-          {
-            accountId: record.accountId,
-            entryType: EntryLineType.CREDIT,
-            amount,
-          },
-        ],
-      });
-
-      const updated = await tx.incomeRecord.update({
-        where: { id },
-        data: {
-          approvalStatus: ApprovalStatus.APPROVED,
-          approvedBy: userId,
-          approvalDate: new Date(),
-          status: TransactionStatus.POSTED,
-          recordedDate: new Date(),
-        },
-      });
-      return { updated, entry };
+    await this.findOne(id);
+    const updated = await this.prisma.incomeRecord.update({
+      where: { id },
+      data: {
+        approvalStatus: ApprovalStatus.APPROVED,
+        approvedBy: userId,
+        approvalDate: new Date(),
+        rejectionReason: null,
+      },
     });
-
     await this.audit.log({
       userId,
       entityType: 'IncomeRecord',
       entityId: id,
       action: AuditAction.APPROVE,
-      after: { status: TransactionStatus.POSTED },
+      after: { approvalStatus: ApprovalStatus.APPROVED },
     });
-
     return {
-      id: result.updated.id,
-      status: result.updated.status,
-      journalEntryId: result.entry.id,
-      approvedAt: result.updated.recordedDate,
+      id: updated.id,
+      status: updated.status,
+      approvalStatus: updated.approvalStatus,
     };
   }
 
-  /** Reject: mark REJECTED and keep PENDING so it stays editable/resubmittable. */
+  /**
+   * Reject: mark the approval REJECTED. The ledger is untouched (the money was
+   * already received and posted); this is a review outcome only.
+   */
   async reject(id: string, userId: string, rejectionReason?: string) {
-    const record = await this.findOne(id);
-    if (record.status === TransactionStatus.POSTED) {
-      throw new UnprocessableEntityException(
-        'Posted income records cannot be rejected',
-      );
-    }
+    await this.findOne(id);
     const updated = await this.prisma.incomeRecord.update({
       where: { id },
       data: {
         approvalStatus: ApprovalStatus.REJECTED,
         rejectionReason,
-        status: TransactionStatus.PENDING,
+        approvedBy: userId,
+        approvalDate: new Date(),
       },
     });
     await this.audit.log({
@@ -271,9 +299,9 @@ export class IncomeService {
     });
     return {
       id: updated.id,
+      status: updated.status,
       approvalStatus: updated.approvalStatus,
       rejectionReason: updated.rejectionReason,
-      status: updated.status,
     };
   }
 }
