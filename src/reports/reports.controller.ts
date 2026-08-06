@@ -10,8 +10,10 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import {
   BalanceSheetQueryDto,
+  ExpenseSummaryQueryDto,
   ExportFormat,
   ExportQueryDto,
+  IncomeSummaryQueryDto,
   PeriodQueryDto,
   TrendQueryDto,
 } from './dto/report-query.dto';
@@ -49,13 +51,13 @@ export class ReportsController {
   }
 
   @Get('income-summary')
-  incomeSummary(@Query() q: PeriodQueryDto) {
-    return this.reports.incomeSummary(q.month, q.year);
+  incomeSummary(@Query() q: IncomeSummaryQueryDto) {
+    return this.reports.incomeSummary(q);
   }
 
   @Get('expense-summary')
-  expenseSummary(@Query() q: PeriodQueryDto) {
-    return this.reports.expenseSummary(q.month, q.year);
+  expenseSummary(@Query() q: ExpenseSummaryQueryDto) {
+    return this.reports.expenseSummary(q);
   }
 
   @Get('aging')
@@ -119,9 +121,9 @@ export class ReportsController {
       case 'balance-sheet':
         return this.reports.balanceSheet(q.date);
       case 'income-summary':
-        return this.reports.incomeSummary(q.month, q.year);
+        return this.reports.incomeSummary(q);
       case 'expense-summary':
-        return this.reports.expenseSummary(q.month, q.year);
+        return this.reports.expenseSummary(q);
       case 'aging':
         return this.reports.aging();
       case 'tax-summary':

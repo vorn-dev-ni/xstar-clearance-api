@@ -3,10 +3,17 @@ import {
   AccountType,
   EntryLineType,
   EntryStatus,
+  FilingStatus,
+  Prisma,
+  TaxFilingType,
   TransactionStatus,
 } from '@prisma/client';
 import { monthYearRange } from '../common/date-range';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ExpenseSummaryQueryDto,
+  IncomeSummaryQueryDto,
+} from './dto/report-query.dto';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -19,6 +26,20 @@ function periodLabel(month?: number, year?: number): string {
     return `${name} ${year}`;
   }
   return year ? String(year) : 'All time';
+}
+
+/**
+ * Match a report month/year against `TaxFilingRecord.filingPeriod` (a "YYYY-MM"
+ * string): exact month → "2026-02"; year only → any period in that year; neither →
+ * no filter (undefined leaves the where-clause key unconstrained).
+ */
+function filingPeriodFilter(
+  month?: number,
+  year?: number,
+): string | Prisma.StringFilter | undefined {
+  if (!year) return undefined;
+  if (month) return `${year}-${String(month).padStart(2, '0')}`;
+  return { startsWith: `${year}-` };
 }
 
 @Injectable()
@@ -158,12 +179,27 @@ export class ReportsService {
     return { year, months };
   }
 
-  /** Income totals grouped by customer for the period. */
-  async incomeSummary(month?: number, year?: number) {
-    const range = monthYearRange(month, year);
+  /** Income totals grouped by customer for the period, optionally filtered. */
+  async incomeSummary(q: IncomeSummaryQueryDto = {}) {
+    const range = monthYearRange(q.month, q.year);
+    const where: Prisma.IncomeRecordWhereInput = {
+      status: TransactionStatus.POSTED,
+      recordDate: range,
+      customerId: q.customerId,
+      serviceType: q.serviceType,
+      ...(q.search
+        ? {
+            OR: [
+              { recordNumber: { contains: q.search, mode: 'insensitive' } },
+              { description: { contains: q.search, mode: 'insensitive' } },
+              { invoiceNumber: { contains: q.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
     const grouped = await this.prisma.incomeRecord.groupBy({
       by: ['customerId'],
-      where: { status: TransactionStatus.POSTED, recordDate: range },
+      where,
       _sum: { amount: true },
       _count: true,
     });
@@ -191,7 +227,7 @@ export class ReportsService {
 
     return {
       reportType: 'INCOME_SUMMARY',
-      reportPeriod: periodLabel(month, year),
+      reportPeriod: periodLabel(q.month, q.year),
       summary,
       totalIncome,
     };
@@ -199,6 +235,10 @@ export class ReportsService {
 
   async taxSummary(month?: number, year?: number) {
     const range = monthYearRange(month, year);
+    // Withholding & NSSF come from filed returns (TaxFilingRecord), matched by the
+    // report period against `filingPeriod` ("YYYY-MM"). Any status except REJECTED
+    // counts, so draft filings still surface.
+    const filingPeriod = filingPeriodFilter(month, year);
     const [income, invoiceVat, withholding, nssf] = await Promise.all([
       this.prisma.incomeRecord.aggregate({
         where: { status: TransactionStatus.POSTED, recordDate: range },
@@ -208,23 +248,28 @@ export class ReportsService {
         where: { invoiceDate: range, status: { not: 'DRAFT' } },
         _sum: { taxAmount: true },
       }),
-      this.prisma.expenseRecord.aggregate({
-        where: { recordDate: range, expenseType: 'WITHHOLDING_TAX' },
-        _sum: { amount: true },
-      }),
-      this.prisma.expenseRecord.aggregate({
+      this.prisma.taxFilingRecord.aggregate({
         where: {
-          recordDate: range,
-          expenseType: 'NSSF_CONTRIBUTION',
+          filingType: TaxFilingType.WITHHOLDING_TAX,
+          status: { not: FilingStatus.REJECTED },
+          filingPeriod,
         },
-        _sum: { amount: true },
+        _sum: { taxAmount: true },
+      }),
+      this.prisma.taxFilingRecord.aggregate({
+        where: {
+          filingType: TaxFilingType.NSSF,
+          status: { not: FilingStatus.REJECTED },
+          filingPeriod,
+        },
+        _sum: { taxAmount: true },
       }),
     ]);
 
     const taxableIncome = round2(Number(income._sum.amount ?? 0));
     const vatCollected = round2(Number(invoiceVat._sum.taxAmount ?? 0));
-    const withholdingTax = round2(Number(withholding._sum.amount ?? 0));
-    const nssfAmount = round2(Number(nssf._sum.amount ?? 0));
+    const withholdingTax = round2(Number(withholding._sum.taxAmount ?? 0));
+    const nssfAmount = round2(Number(nssf._sum.taxAmount ?? 0));
     const totalTaxes = round2(vatCollected + withholdingTax + nssfAmount);
 
     return {
@@ -241,12 +286,33 @@ export class ReportsService {
     };
   }
 
-  /** Expense totals grouped by expense type for the period. */
-  async expenseSummary(month?: number, year?: number) {
-    const range = monthYearRange(month, year);
+  /** Expense totals grouped by expense type for the period, optionally filtered. */
+  async expenseSummary(q: ExpenseSummaryQueryDto = {}) {
+    const range = monthYearRange(q.month, q.year);
+    const where: Prisma.ExpenseRecordWhereInput = {
+      status: TransactionStatus.POSTED,
+      recordDate: range,
+      supplierId: q.supplierId,
+      expenseType: q.expenseType,
+      ...(q.search
+        ? {
+            OR: [
+              { recordNumber: { contains: q.search, mode: 'insensitive' } },
+              { description: { contains: q.search, mode: 'insensitive' } },
+              { invoiceNumber: { contains: q.search, mode: 'insensitive' } },
+              { supplierName: { contains: q.search, mode: 'insensitive' } },
+              {
+                supplier: {
+                  nameEn: { contains: q.search, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
     const grouped = await this.prisma.expenseRecord.groupBy({
       by: ['expenseType'],
-      where: { status: TransactionStatus.POSTED, recordDate: range },
+      where,
       _sum: { amount: true },
       _count: true,
     });
@@ -269,7 +335,7 @@ export class ReportsService {
 
     return {
       reportType: 'EXPENSE_SUMMARY',
-      reportPeriod: periodLabel(month, year),
+      reportPeriod: periodLabel(q.month, q.year),
       summary,
       totalExpenses,
     };
