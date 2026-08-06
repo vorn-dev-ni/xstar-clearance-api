@@ -13,11 +13,13 @@ function makeTx(existing: { id: string; container: string }[]) {
 }
 
 const row = (c: Partial<ContainerDto> & { container: string }): ContainerDto =>
-  c as ContainerDto;
+  c;
 
 describe('syncJobContainers', () => {
   it('updates a row by container match when its id is stale (no P2025)', async () => {
-    const { tx, clearancePlan } = makeTx([{ id: 'real-1', container: 'ABC123' }]);
+    const { tx, clearancePlan } = makeTx([
+      { id: 'real-1', container: 'ABC123' },
+    ]);
 
     await syncJobContainers(
       tx,
@@ -59,7 +61,9 @@ describe('syncJobContainers', () => {
   });
 
   it('reuses an existing row for a new (id-less) row with a known container', async () => {
-    const { tx, clearancePlan } = makeTx([{ id: 'real-1', container: 'ABC123' }]);
+    const { tx, clearancePlan } = makeTx([
+      { id: 'real-1', container: 'ABC123' },
+    ]);
 
     await syncJobContainers(
       tx,
@@ -95,12 +99,7 @@ describe('syncJobContainers', () => {
   it('skips rows with a blank container number', async () => {
     const { tx, clearancePlan } = makeTx([]);
 
-    await syncJobContainers(
-      tx,
-      'job-1',
-      [row({ container: '   ' })],
-      'user-1',
-    );
+    await syncJobContainers(tx, 'job-1', [row({ container: '   ' })], 'user-1');
 
     expect(clearancePlan.create).not.toHaveBeenCalled();
     expect(clearancePlan.update).not.toHaveBeenCalled();

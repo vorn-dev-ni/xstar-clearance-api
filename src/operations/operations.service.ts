@@ -115,7 +115,9 @@ export class OperationsService {
       ...(query.hasClearancePlan === undefined
         ? {}
         : {
-            clearancePlans: query.hasClearancePlan ? { some: {} } : { none: {} },
+            clearancePlans: query.hasClearancePlan
+              ? { some: {} }
+              : { none: {} },
           }),
       ...(query.search
         ? {
